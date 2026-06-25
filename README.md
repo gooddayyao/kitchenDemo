@@ -28,3 +28,12 @@ This prototype demonstrates the initial structure for a cooking assistant projec
 ### Notes
 - This phase focuses on a projection-ready UI mockup and basic backend staging.
 - Gemini API and voice integration are planned for later phases.
+
+### Progress sync across machines
+- Use the GitHub repo as the single source of truth.
+- Commit local work, push to `main`, then pull from other machines before starting work.
+- Update `PROJECT_PLAN.md` when the current phase changes or when the next step is defined.
+
+### Current status
+- **Completed:** Phase 1 UI mockup and backend scaffold.
+- **Next step:** Phase 2 Gemini recipe parsing and backend integration.
