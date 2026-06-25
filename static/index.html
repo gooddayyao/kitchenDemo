@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Cooking Assistant Projection Demo</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="panel panel-left">
+            <h2>Recipe Progress</h2>
+            <div class="recipe-summary">
+                <p class="recipe-title">咖哩飯</p>
+                <p class="recipe-meta">3 steps • 24 min</p>
+            </div>
+            <div class="progress-list" id="progressList"></div>
+        </aside>
+
+        <main class="panel panel-center">
+            <div class="projection-card">
+                <div class="projection-title" id="projectionTitle">咖哩飯</div>
+                <div class="projection-step" id="projectionStep">Step 1 / 3</div>
+                <div class="projection-instruction" id="projectionInstruction">切洋蔥、馬鈴薯和胡蘿蔔。</div>
+                <div class="projection-timer">剩餘時間 <span id="projectionTimer">24</span> 分鐘</div>
+                <div class="projection-bar">
+                    <div class="progress-fill" id="projectionFill"></div>
+                </div>
+            </div>
+            <button id="prevNav" class="nav-button nav-left" aria-label="Previous step">←</button>
+            <button id="nextNav" class="nav-button nav-right" aria-label="Next step">→</button>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

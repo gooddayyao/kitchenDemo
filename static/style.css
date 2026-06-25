@@ -1,0 +1,227 @@
+* {
+    box-sizing: border-box;
+}
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #111;
+    color: #f3f3f3;
+}
+
+.app-shell {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 16px;
+    height: 100vh;
+    padding: 16px;
+}
+
+.panel {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-left {
+    overflow-y: auto;
+}
+
+.panel-center {
+    position: relative;
+}
+
+.nav-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.12);
+    color: #ffffff;
+    font-size: 2rem;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.nav-button:hover {
+    background: rgba(255,255,255,0.22);
+    transform: translateY(-50%) scale(1.05);
+}
+
+.nav-left {
+    left: 8px;
+}
+
+.nav-right {
+    right: 8px;
+}
+
+h2 {
+    margin-top: 0;
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+}
+
+.recipe-summary {
+    margin-bottom: 1rem;
+}
+
+.recipe-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.recipe-meta {
+    color: #c9c9c9;
+}
+
+.progress-list {
+    display: grid;
+    gap: 12px;
+}
+
+.progress-step {
+    padding: 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+}
+
+.projection-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(180deg, rgba(22, 23, 29, 0.98), rgba(10, 11, 15, 0.98));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 26px;
+    padding: 40px;
+    gap: 24px;
+    min-height: 0;
+}
+
+.projection-title {
+    font-size: 3rem;
+    font-weight: 800;
+}
+
+.projection-step {
+    font-size: 1.5rem;
+    color: #ffd166;
+}
+
+.projection-instruction {
+    font-size: 1.8rem;
+    text-align: center;
+    line-height: 1.4;
+    max-width: 720px;
+}
+
+.projection-timer {
+    font-size: 1.1rem;
+    color: #c9c9c9;
+}
+
+.projection-bar {
+    width: 100%;
+    height: 16px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #81c784, #4db6ac);
+    transition: width 0.3s ease;
+}
+
+.controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+button {
+    border: none;
+    border-radius: 12px;
+    padding: 14px 20px;
+    background: #3949ab;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+button:hover {
+    transform: translateY(-1px);
+    background: #5c6bc0;
+}
+
+.chat-area {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.chat-message {
+    padding: 14px;
+    border-radius: 16px;
+    line-height: 1.5;
+}
+
+.chat-message.bot {
+    background: rgba(100, 116, 139, 0.25);
+}
+
+.chat-message.user {
+    align-self: flex-end;
+    background: rgba(100, 181, 246, 0.2);
+}
+
+.chat-input-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.chat-input-row input {
+    flex: 1;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.16);
+    padding: 14px;
+    background: rgba(255,255,255,0.05);
+    color: #f3f3f3;
+}
+
+.voice-button {
+    margin-top: 12px;
+    width: 100%;
+    font-size: 1.1rem;
+}
+
+@media (max-width: 1300px) {
+    .app-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .panel {
+        height: auto;
+    }
+}
