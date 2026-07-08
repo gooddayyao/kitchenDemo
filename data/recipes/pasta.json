@@ -1,0 +1,78 @@
+{
+  "id": "pasta",
+  "title": "番茄義大利麵",
+  "ingredients": [
+    { "name": "義大利麵", "quantity": "200 克", "prep": null },
+    { "name": "熟透番茄", "quantity": "3 顆", "prep": "去皮切塊" },
+    { "name": "洋蔥", "quantity": "半顆", "prep": "切丁" },
+    { "name": "大蒜", "quantity": "2 瓣", "prep": "切末" },
+    { "name": "橄欖油", "quantity": "適量", "prep": null },
+    { "name": "番茄糊", "quantity": "2 大匙", "prep": null },
+    { "name": "羅勒葉", "quantity": "少許", "prep": "切碎" },
+    { "name": "鹽", "quantity": "適量", "prep": null },
+    { "name": "黑胡椒", "quantity": "適量", "prep": null },
+    { "name": "帕瑪森起司粉", "quantity": "適量", "prep": null }
+  ],
+  "zones": {
+    "cutting_board": { "label": "砧板區", "x": 0.08, "y": 0.18, "w": 0.38, "h": 0.52 },
+    "stove": { "label": "爐灶區", "x": 0.52, "y": 0.12, "w": 0.38, "h": 0.58 },
+    "prep": { "label": "備料區", "x": 0.08, "y": 0.74, "w": 0.82, "h": 0.18 }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "title": "切配食材",
+      "instruction": "番茄去皮切塊，洋蔥切丁，大蒜切末。",
+      "zone": "cutting_board",
+      "guidance_type": "cut_lines",
+      "timer_seconds": 0,
+      "completion": "manual_confirm",
+      "guide_lines": {
+        "orientation": "grid",
+        "spacing_px": 36,
+        "count": 4,
+        "label": "切丁參考線（約 1cm）"
+      }
+    },
+    {
+      "step": 2,
+      "title": "煮麵",
+      "instruction": "鍋中燒水加鹽，水滾後放入義大利麵，煮至七分熟，撈起保留煮麵水。",
+      "zone": "stove",
+      "guidance_type": "text",
+      "timer_seconds": 480,
+      "completion": "timer",
+      "guide_lines": null
+    },
+    {
+      "step": 3,
+      "title": "炒香底料",
+      "instruction": "另起一鍋橄欖油，炒香洋蔥丁與蒜末。",
+      "zone": "stove",
+      "guidance_type": "text",
+      "timer_seconds": 120,
+      "completion": "vision_heuristic",
+      "guide_lines": null
+    },
+    {
+      "step": 4,
+      "title": "煮醬",
+      "instruction": "加入番茄塊和番茄糊翻炒，加少許煮麵水煮至軟爛成醬。",
+      "zone": "stove",
+      "guidance_type": "text",
+      "timer_seconds": 300,
+      "completion": "timer",
+      "guide_lines": null
+    },
+    {
+      "step": 5,
+      "title": "拌炒完成",
+      "instruction": "放入義大利麵拌炒，加入羅勒、鹽、黑胡椒調味，盛盤撒起司粉。",
+      "zone": "stove",
+      "guidance_type": "confirm_prep",
+      "timer_seconds": 0,
+      "completion": "manual_confirm",
+      "guide_lines": null
+    }
+  ]
+}

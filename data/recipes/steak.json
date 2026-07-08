@@ -1,0 +1,69 @@
+{
+  "id": "steak",
+  "title": "香煎牛排",
+  "ingredients": [
+    { "name": "厚切牛排", "quantity": "1 塊", "prep": null },
+    { "name": "鹽", "quantity": "適量", "prep": null },
+    { "name": "黑胡椒", "quantity": "適量", "prep": null },
+    { "name": "橄欖油", "quantity": "適量", "prep": null },
+    { "name": "大蒜", "quantity": "2 瓣", "prep": "拍扁" },
+    { "name": "迷迭香", "quantity": "1 支", "prep": null },
+    { "name": "無鹽奶油", "quantity": "20 克", "prep": null }
+  ],
+  "zones": {
+    "cutting_board": { "label": "砧板區", "x": 0.08, "y": 0.18, "w": 0.38, "h": 0.52 },
+    "stove": { "label": "爐灶區", "x": 0.52, "y": 0.12, "w": 0.38, "h": 0.58 },
+    "prep": { "label": "備料區", "x": 0.08, "y": 0.74, "w": 0.82, "h": 0.18 }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "title": "準備牛排",
+      "instruction": "將牛排從冰箱取出，靜置室溫 30 分鐘，用廚房紙巾擦乾表面水分，撒上鹽和黑胡椒調味。",
+      "zone": "prep",
+      "guidance_type": "confirm_prep",
+      "timer_seconds": 0,
+      "completion": "manual_confirm",
+      "guide_lines": null
+    },
+    {
+      "step": 2,
+      "title": "煎牛排",
+      "instruction": "熱鍋，加入橄欖油，待油熱後放入牛排，大火煎 2-3 分鐘，直到表面金黃酥脆。翻面後加入大蒜、迷迭香和奶油，淋油 2-3 分鐘，並將側邊煎上色。",
+      "zone": "stove",
+      "guidance_type": "text",
+      "timer_seconds": 180,
+      "completion": "timer",
+      "guide_lines": null,
+      "substeps": [
+        { "id": "2.1", "instruction": "翻面，加入拍扁的大蒜、迷迭香和奶油，淋油 2-3 分鐘", "timer_seconds": 0, "completion": "vision_heuristic" },
+        { "id": "2.2", "instruction": "將牛排側邊也煎至上色", "timer_seconds": 0, "completion": "manual_confirm" }
+      ]
+    },
+    {
+      "step": 3,
+      "title": "靜置",
+      "instruction": "將牛排取出，放在砧板上靜置 5-10 分鐘，讓肉汁回流。",
+      "zone": "cutting_board",
+      "guidance_type": "text",
+      "timer_seconds": 300,
+      "completion": "timer",
+      "guide_lines": null
+    },
+    {
+      "step": 4,
+      "title": "切片",
+      "instruction": "沿著紋路切片，厚度約 1.5 公分即可享用。",
+      "zone": "cutting_board",
+      "guidance_type": "cut_lines",
+      "timer_seconds": 0,
+      "completion": "manual_confirm",
+      "guide_lines": {
+        "orientation": "vertical",
+        "spacing_px": 48,
+        "count": 5,
+        "label": "切片線（約 1.5cm）"
+      }
+    }
+  ]
+}

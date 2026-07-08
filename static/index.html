@@ -7,31 +7,95 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <div class="app-shell">
-        <aside class="panel panel-left">
-            <h2>Recipe Progress</h2>
-            <div class="recipe-summary">
-                <p class="recipe-title">咖哩飯</p>
-                <p class="recipe-meta">3 steps • 24 min</p>
-            </div>
-            <div class="progress-list" id="progressList"></div>
-        </aside>
+  <!-- 控制面板 -->
+  <div class="app-shell" id="controlPanel">
+    <aside class="panel panel-left">
+      <h2>料理進度</h2>
+      <div class="recipe-picker">
+        <label for="recipeSelect">選擇食譜</label>
+        <select id="recipeSelect"></select>
+      </div>
+      <div class="recipe-summary">
+        <p class="recipe-title" id="recipeTitle">載入中...</p>
+        <p class="recipe-meta" id="recipeMeta"></p>
+      </div>
+      <div class="progress-list" id="progressList"></div>
+      <button id="projectButton" class="btn-project">進入投影模式</button>
+      <button id="calibrateButton" class="btn-secondary">校正投影區域</button>
+    </aside>
 
-        <main class="panel panel-center">
-            <div class="projection-card">
-                <div class="projection-title" id="projectionTitle">咖哩飯</div>
-                <div class="projection-step" id="projectionStep">Step 1 / 3</div>
-                <div class="projection-instruction" id="projectionInstruction">切洋蔥、馬鈴薯和胡蘿蔔。</div>
-                <div class="projection-timer">剩餘時間 <span id="projectionTimer">24</span> 分鐘</div>
-                <div class="projection-bar">
-                    <div class="progress-fill" id="projectionFill"></div>
-                </div>
-            </div>
-            <button id="prevNav" class="nav-button nav-left" aria-label="Previous step">←</button>
-            <button id="nextNav" class="nav-button nav-right" aria-label="Next step">→</button>
-        </main>
+    <main class="panel panel-center">
+      <div class="projection-card">
+        <div class="projection-title" id="projectionTitle">—</div>
+        <div class="projection-step" id="projectionStep">—</div>
+        <div class="projection-instruction" id="projectionInstruction">—</div>
+        <div class="projection-timer" id="projectionTimerWrap">
+          本步驟計時 <span id="projectionTimer">—</span>
+        </div>
+        <div class="projection-status" id="projectionStatus"></div>
+        <div class="projection-bar">
+          <div class="progress-fill" id="projectionFill"></div>
+        </div>
+      </div>
+      <button id="confirmStep" class="btn-confirm">確認完成此步驟</button>
+      <button id="prevNav" class="nav-button nav-left" aria-label="Previous step">←</button>
+      <button id="nextNav" class="nav-button nav-right" aria-label="Next step">→</button>
+    </main>
+
+    <aside class="panel panel-right">
+      <h2>食譜輸入</h2>
+      <textarea id="recipeInput" rows="8" placeholder="貼上食譜文字，或從左側選擇內建食譜..."></textarea>
+      <button id="parseRecipeBtn" class="btn-secondary">解析食譜</button>
+      <h3>材料</h3>
+      <ul id="ingredientList" class="ingredient-list"></ul>
+    </aside>
+  </div>
+
+  <!-- 投影模式 -->
+  <div class="projection-mode" id="projectionMode">
+    <div class="projection-background" id="projectionBg"></div>
+    <canvas id="spatialCanvas" class="spatial-canvas"></canvas>
+
+    <div class="projection-overlay">
+      <div class="projection-card-fullscreen" id="projectionCardFullscreen">
+        <div class="projection-title" id="projectionTitleFS">—</div>
+        <div class="projection-step" id="projectionStepFS">—</div>
+        <div class="projection-instruction" id="projectionInstructionFS">—</div>
+        <div class="projection-timer" id="projectionTimerWrapFS">
+          本步驟計時 <span id="projectionTimerFS">—</span>
+        </div>
+      </div>
+
+      <button id="confirmStepFS" class="btn-confirm-fs">確認完成</button>
+      <button id="prevNavFS" class="nav-button nav-left-fs" aria-label="Previous step">←</button>
+      <button id="nextNavFS" class="nav-button nav-right-fs" aria-label="Next step">→</button>
+      <button id="exitProject" class="btn-exit-project">✕ 結束投影</button>
+
+      <div class="env-selector">
+        <label>模擬環境：</label>
+        <select id="bgSelect">
+          <option value="dark">深色廚房</option>
+          <option value="bright">明亮廚房</option>
+          <option value="wood">木質檯面</option>
+          <option value="marble">大理石檯面</option>
+        </select>
+        <label class="toggle-label">
+          <input type="checkbox" id="showZones" checked /> 顯示工作區
+        </label>
+      </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <div class="camera-preview" id="cameraPreview">
+      <video id="cameraVideo" autoplay playsinline muted></video>
+      <canvas id="cameraCanvas" hidden></canvas>
+      <span class="camera-label">相機監控</span>
+    </div>
+  </div>
+
+  <script src="/static/step-engine.js"></script>
+  <script src="/static/calibration.js"></script>
+  <script src="/static/overlay.js"></script>
+  <script src="/static/vision.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

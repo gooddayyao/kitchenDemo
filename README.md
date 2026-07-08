@@ -1,17 +1,26 @@
 # AI Cooking Assistant Projection Demo
 
-## Phase 1 - Project Structure and UI Mockup
+Spatial projection + semi-automatic camera cooking assistant for a fixed kitchen counter.
 
-This prototype demonstrates the initial structure for a cooking assistant projection demo.
+## Features (Phase 2–5)
+- Structured recipes (`data/recipes/*.json`) with zones, timers, guidance types
+- Step Engine: `pending` → `active` → `awaiting_confirm` → `done`
+- Gemini recipe parsing via `/api/parse-recipe` (rule-based fallback when no API key)
+- Spatial Canvas overlay with cut-line guides on counter zones
+- Homography calibration (click four corners once, saved to localStorage + server)
+- Per-step countdown timer (starts when step becomes active)
+- Semi-automatic camera monitoring with confidence-based user confirmation
+- Optional Gemini Vision analysis when `GEMINI_API_KEY` is configured
 
-### What is included
-- `main.py`: FastAPI backend serving the demo UI
-- `static/index.html`: Browser UI mockup
-- `static/style.css`: Layout and projection-style design
-- `static/app.js`: UI state, step navigation, and mock data
-- `requirements.txt`: Python dependencies
+## Project Structure
+- `main.py` — FastAPI backend
+- `services/recipe_parser.py` — Gemini + rule-based recipe parsing
+- `services/vision.py` — Semi-auto vision heuristics
+- `data/recipes/` — Structured recipe JSON files
+- `recipe_schema.json` — Recipe JSON schema
+- `static/` — Frontend (step engine, calibration, overlay, vision, app)
 
-### Run the demo
+## Run the demo
 1. Create a Python 3.11+ virtual environment.
 2. Install dependencies:
    ```powershell
@@ -19,21 +28,37 @@ This prototype demonstrates the initial structure for a cooking assistant projec
    .\.venv\Scripts\Activate.ps1
    pip install -r requirements.txt
    ```
-3. Launch the app:
+3. (Optional) Set Gemini API key:
+   ```powershell
+   $env:GEMINI_API_KEY = "your-key"
+   ```
+4. Launch the app:
    ```powershell
    uvicorn main:app --reload --host 127.0.0.1 --port 8000
    ```
-4. Open `http://127.0.0.1:8000` in Chrome or Edge.
+   Or run `start.bat`.
+5. Open `http://127.0.0.1:8000` in Chrome or Edge.
 
-### Notes
-- This phase focuses on a projection-ready UI mockup and basic backend staging.
-- Gemini API and voice integration are planned for later phases.
+## Usage
+1. Select a recipe (e.g. 香煎牛排) from the left panel.
+2. Click **校正投影區域** and click four counter corners in projection mode.
+3. Click **進入投影模式** — spatial hints appear on cutting board / stove zones.
+4. Steps with `timer_seconds` start counting down when they become active.
+5. Camera monitors pot/prep heuristics; low confidence shows a confirm prompt.
+6. Click **確認完成** to advance when manual confirmation is needed.
 
-### Progress sync across machines
-- Use the GitHub repo as the single source of truth.
-- Commit local work, push to `main`, then pull from other machines before starting work.
-- Update `PROJECT_PLAN.md` when the current phase changes or when the next step is defined.
+## API Endpoints
+- `GET /api/health` — Health check
+- `GET /api/recipes` — List recipes
+- `GET /api/recipes/{id}` — Get structured recipe
+- `POST /api/parse-recipe` — Parse recipe text
+- `GET/POST /api/calibration` — Calibration data
+- `POST /api/vision/analyze` — Analyze camera frame
 
-### Current status
-- **Completed:** Phase 1 UI mockup and backend scaffold.
-- **Next step:** Phase 2 Gemini recipe parsing and backend integration.
+## Current Status
+- **Completed:** Phase 1 UI scaffold; Phase 2–5 core implementation
+- **Next:** Phase 6 voice Q&A (auxiliary); improve vision accuracy post-MVP
+
+## Progress Sync
+- Use GitHub as single source of truth.
+- Update `PROJECT_PLAN.md` when phases change.

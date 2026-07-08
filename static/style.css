@@ -12,7 +12,7 @@ html, body {
 
 .app-shell {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 280px 1fr 300px;
     gap: 16px;
     height: 100vh;
     padding: 16px;
@@ -92,6 +92,158 @@ h2 {
     background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.progress-step.current {
+    border-color: rgba(255, 209, 102, 0.6);
+}
+
+.progress-step.active {
+    background: rgba(77, 182, 172, 0.12);
+}
+
+.progress-step.done {
+    opacity: 0.65;
+}
+
+.progress-step.awaiting_confirm {
+    border-color: rgba(255, 140, 60, 0.7);
+}
+
+.step-status {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 0.8rem;
+    color: #ffd166;
+}
+
+.recipe-picker {
+    margin-bottom: 1rem;
+}
+
+.recipe-picker label {
+    display: block;
+    margin-bottom: 6px;
+    color: #c9c9c9;
+}
+
+.recipe-picker select,
+.panel-right textarea {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.16);
+    padding: 10px;
+    background: rgba(255,255,255,0.05);
+    color: #f3f3f3;
+    font-family: inherit;
+}
+
+.ingredient-list {
+    margin: 0;
+    padding-left: 1.2rem;
+    color: #ddd;
+    line-height: 1.6;
+}
+
+.projection-status {
+    font-size: 1rem;
+    color: #ffb74d;
+    min-height: 1.4rem;
+}
+
+.btn-secondary {
+    width: 100%;
+    background: rgba(255,255,255,0.12);
+    margin-top: 10px;
+}
+
+.btn-secondary:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.btn-confirm {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #ff8c3c, #ff6b35);
+    z-index: 5;
+}
+
+.btn-confirm-fs {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #ff8c3c, #ff6b35);
+    z-index: 30;
+    padding: 16px 32px;
+    font-size: 1.2rem;
+}
+
+.spatial-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+    pointer-events: auto;
+}
+
+.projection-mode.active .projection-overlay {
+    pointer-events: none;
+}
+
+.projection-mode.active .projection-overlay button,
+.projection-mode.active .env-selector,
+.projection-mode.active .projection-card-fullscreen {
+    pointer-events: auto;
+}
+
+.camera-preview {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 160px;
+    height: 120px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.2);
+    z-index: 40;
+    background: #000;
+}
+
+.camera-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.camera-label {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    font-size: 0.7rem;
+    color: #fff;
+    background: rgba(0,0,0,0.5);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #f3f3f3;
+    font-weight: normal;
+}
+
+.panel-right h3 {
+    margin: 1rem 0 0.5rem;
+    font-size: 1rem;
 }
 
 .projection-card {
@@ -143,6 +295,199 @@ h2 {
     width: 0%;
     background: linear-gradient(90deg, #81c784, #4db6ac);
     transition: width 0.3s ease;
+}
+
+/* 投影模式樣式 */
+.projection-mode {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+}
+
+.projection-mode.active {
+    display: flex;
+}
+
+.projection-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #2a2a2a;
+    z-index: 0;
+}
+
+.projection-background.dark {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+}
+
+.projection-background.bright {
+    background: linear-gradient(135deg, #f5f5f0 0%, #e8e8e0 100%);
+}
+
+.projection-background.wood {
+    background: linear-gradient(135deg, #8b6f47 0%, #5c4033 100%);
+}
+
+.projection-background.marble {
+    background: linear-gradient(135deg, #ddd 0%, #b0b0b0 50%, #888 100%);
+    background-attachment: fixed;
+}
+
+.projection-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.projection-card-fullscreen {
+    background: rgba(20, 20, 25, 0.85);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 40px;
+    padding: 60px 80px;
+    text-align: center;
+    max-width: 900px;
+    width: 90%;
+    gap: 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: grab;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    touch-action: none;
+    user-select: none;
+}
+
+.projection-card-fullscreen.dragging {
+    cursor: grabbing;
+    box-shadow: 0 30px 80px rgba(255, 215, 102, 0.3);
+}
+
+.projection-card-fullscreen #projectionTitleFS {
+    font-size: 4rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.projection-card-fullscreen #projectionStepFS {
+    font-size: 2rem;
+    color: #ffd166;
+    margin: 0;
+}
+
+.projection-card-fullscreen #projectionInstructionFS {
+    font-size: 2.2rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.projection-card-fullscreen .projection-bar {
+    width: 100%;
+    height: 24px;
+    margin: 0;
+}
+
+.nav-left-fs, .nav-right-fs {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 3rem;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+    z-index: 20;
+}
+
+.nav-left-fs:hover, .nav-right-fs:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.nav-left-fs {
+    left: 40px;
+}
+
+.nav-right-fs {
+    right: 40px;
+}
+
+.btn-exit-project {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    font-size: 1.5rem;
+    z-index: 25;
+}
+
+.btn-exit-project:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.env-selector {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 25, 0.9);
+    padding: 20px 30px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 25;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.env-selector label {
+    color: #f3f3f3;
+    font-weight: 600;
+}
+
+.env-selector select {
+    padding: 10px 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    color: #f3f3f3;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.env-selector select:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-project {
+    width: 100%;
+    background: linear-gradient(135deg, #4db6ac, #26a69a);
+    margin-top: 20px;
+}
+
+.btn-project:hover {
+    background: linear-gradient(135deg, #26a69a, #00897b);
 }
 
 .controls {
@@ -223,5 +568,9 @@ button:hover {
 
     .panel {
         height: auto;
+    }
+
+    .panel-right {
+        order: 3;
     }
 }
