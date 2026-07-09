@@ -1,5 +1,9 @@
 # Project Plan: AI Cooking Assistant Projection Demo
 
+> **產品主計畫已整合至 [`KITCHEN_MVP_PLAN.md`](KITCHEN_MVP_PLAN.md)。**  
+> 本文件追蹤 **Web Demo 軌道**（FastAPI + `static/`）的工程 Phase 與完成狀態。  
+> **CV 主線**（YOLOv8 + OpenCV，`src/`）以 KITCHEN_MVP_PLAN 為準。
+
 ## Product Vision
 A spatial projection + semi-automatic camera cooking assistant for a fixed kitchen counter setup. The projector displays guidance next to ingredients and cookware; the camera monitors prep and cooking progress with user confirmation when confidence is low.
 
@@ -54,7 +58,7 @@ A spatial projection + semi-automatic camera cooking assistant for a fixed kitch
   - Falls back to local heuristics when API unavailable or confidence is low
 - **Notes:** Local stove heuristics stay below auto-advance threshold; only high-confidence Gemini/marker signals may auto-complete.
 ### Phase 6 — Voice Interaction (Auxiliary)
-- **Status:** Planned
+- **Status:** Deferred（優先 KITCHEN Phase 1 CV 管線）
 - **Goals:**
   - Microphone Q&A + browser TTS for step-context questions
   - Does not replace step engine or spatial visual guidance
@@ -87,3 +91,4 @@ A spatial projection + semi-automatic camera cooking assistant for a fixed kitch
 - Hardware mounting is out of scope; software assumes fixed projector + camera with one-time calibration.
 - Semi-automatic vision is the MVP target; full ingredient recognition is post-MVP.
 - Do not rely on local-only state for recipe progress; persist calibration in localStorage, recipes via API.
+- Phase 6 語音互動暫緩，優先 KITCHEN Phase 1（YOLO CV 管線，見 `KITCHEN_MVP_PLAN.md`）。
