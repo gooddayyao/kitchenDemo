@@ -112,6 +112,13 @@ h2 {
     border-color: rgba(255, 140, 60, 0.7);
 }
 
+.substep-hint {
+    display: block;
+    margin-top: 6px;
+    color: #9ad7d1;
+    font-size: 0.78rem;
+}
+
 .step-status {
     display: inline-block;
     margin-left: 8px;
@@ -275,6 +282,7 @@ h2 {
     text-align: center;
     line-height: 1.4;
     max-width: 720px;
+    white-space: pre-line;
 }
 
 .projection-timer {

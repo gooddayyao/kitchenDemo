@@ -66,11 +66,7 @@ class SpatialOverlay {
         this.ctx.fillRect(0, 0, w, h);
         this.ctx.fillStyle = "#fff";
         this.ctx.font = "24px Segoe UI, sans-serif";
-        this.ctx.fillText(
-            `點選料理台四角進行校正 (${this.calibration.corners.length}/4)`,
-            w / 2 - 200,
-            60
-        );
+        this.ctx.fillText(`依序點選四角：1 左上、2 右上、3 右下、4 左下（${this.calibration.corners.length}/4）`, w / 2 - 320, 60);
         this.calibration.corners.forEach((c, i) => {
             this.ctx.beginPath();
             this.ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);

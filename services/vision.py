@@ -112,13 +112,15 @@ def _analyze_heuristic(image_b64: str, step_context: Dict[str, Any]) -> Dict[str
             )
 
         if completion == "vision_heuristic" and zone == "stove":
+            # Motion alone is noisy — keep confidence below auto-advance threshold
+            # so the UI prompts for confirm unless Gemini is highly confident.
             active = motion_score > 0.02 or (120 < avg < 200 and motion_score > 0.005)
-            confidence = 0.75 if active and motion_score > 0.03 else 0.35
+            confidence = 0.55 if active and motion_score > 0.03 else 0.3
             return _result(
-                active,
+                False,
                 confidence,
                 "pot_motion",
-                "鍋子有活動跡象" if active else "鍋子狀態不明確，請確認",
+                "鍋子有活動跡象，請確認是否完成" if active else "鍋子狀態不明確，請確認",
                 source="heuristic",
             )
 

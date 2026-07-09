@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CookingRecipe",
+  "type": "object",
+  "required": ["id", "title", "ingredients", "zones", "steps"],
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string" },
+    "ingredients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "quantity"],
+        "properties": {
+          "name": { "type": "string" },
+          "quantity": { "type": "string" },
+          "prep": { "type": ["string", "null"], "description": "e.g. 切丁, 切片, 拍扁" }
+        }
+      }
+    },
+    "zones": {
+      "type": "object",
+      "description": "Normalized counter zones (0-1 coordinates)",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["label", "x", "y", "w", "h"],
+        "properties": {
+          "label": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "w": { "type": "number" },
+          "h": { "type": "number" }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "title", "instruction", "zone", "guidance_type", "timer_seconds", "completion"],
+        "properties": {
+          "step": { "type": "integer" },
+          "title": { "type": "string" },
+          "instruction": { "type": "string" },
+          "zone": { "type": "string", "description": "Key in zones object" },
+          "guidance_type": {
+            "type": "string",
+            "enum": ["text", "cut_lines", "confirm_prep"]
+          },
+          "timer_seconds": { "type": "integer", "minimum": 0 },
+          "completion": {
+            "type": "string",
+            "enum": ["timer", "manual_confirm", "marker_detect", "vision_heuristic"]
+          },
+          "guide_lines": {
+            "type": ["object", "null"],
+            "properties": {
+              "orientation": { "type": "string", "enum": ["horizontal", "vertical", "grid"] },
+              "spacing_px": { "type": "number" },
+              "count": { "type": "integer" },
+              "label": { "type": "string" }
+            }
+          },
+          "substeps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "instruction"],
+              "properties": {
+                "id": { "type": "string" },
+                "instruction": { "type": "string" },
+                "timer_seconds": { "type": "integer" },
+                "completion": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

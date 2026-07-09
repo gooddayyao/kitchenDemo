@@ -58,6 +58,7 @@ class StepEngine {
             this.timerRemaining -= 1;
             if (this.onTimerTick) this.onTimerTick(this.timerRemaining, step);
             if (this.timerRemaining <= 0) {
+                this.timerRemaining = 0;
                 this._stopTimer();
                 this._handleCompletion(step, true);
             }
@@ -71,27 +72,57 @@ class StepEngine {
         }
     }
 
+    /**
+     * Timer end behavior:
+     * - completion === "timer" → auto-advance
+     * - otherwise → awaiting_confirm (manual / vision assisted)
+     */
     _handleCompletion(step, fromTimer = false) {
         if (fromTimer && step.completion === "timer") {
             this._completeStep(step.step);
             return;
         }
         this.stepStatuses[step.step] = STEP_STATUS.AWAITING_CONFIRM;
-        if (this.onAwaitingConfirm) this.onAwaitingConfirm(step);
+        if (this.onAwaitingConfirm) {
+            this.onAwaitingConfirm(
+                step,
+                fromTimer
+                    ? `計時結束，請確認「${step.title}」是否完成`
+                    : `請確認「${step.title}」是否完成`
+            );
+        }
         this._notify();
     }
 
-  applyVisionResult(result) {
+    /**
+     * Conservative vision handling:
+     * - high confidence + detected → auto-complete for vision/marker steps
+     * - uncertain → prompt confirm without leaving ACTIVE (keep polling / avoid false advance)
+     */
+    applyVisionResult(result) {
         const step = this.getCurrentStep();
-        if (!step || this.getStepStatus(step.step) !== STEP_STATUS.ACTIVE) return;
+        const status = step ? this.getStepStatus(step.step) : null;
+        if (!step || (status !== STEP_STATUS.ACTIVE && status !== STEP_STATUS.AWAITING_CONFIRM)) {
+            return;
+        }
 
-        if (result.confidence >= 0.6 && result.detected) {
-            if (step.completion === "vision_heuristic" || step.completion === "marker_detect") {
-                this._completeStep(step.step);
+        const canAuto =
+            step.completion === "vision_heuristic" || step.completion === "marker_detect";
+        const highConfidence = result.confidence >= 0.6 && result.detected && !result.needs_confirm;
+
+        if (canAuto && highConfidence && status === STEP_STATUS.ACTIVE) {
+            this._completeStep(step.step);
+            return;
+        }
+
+        if (result.needs_confirm || !highConfidence) {
+            if (this.onAwaitingConfirm) {
+                this.onAwaitingConfirm(
+                    step,
+                    result.message || `狀態不明確，請確認「${step.title}」是否完成`
+                );
             }
-        } else if (result.needs_confirm) {
-            this.stepStatuses[step.step] = STEP_STATUS.AWAITING_CONFIRM;
-            if (this.onAwaitingConfirm) this.onAwaitingConfirm(step, result.message);
+            // Stay ACTIVE so polling can recover; UI shows confirm from message + completion type.
             this._notify();
         }
     }
@@ -99,6 +130,8 @@ class StepEngine {
     confirmCurrentStep() {
         const step = this.getCurrentStep();
         if (!step) return;
+        const status = this.getStepStatus(step.step);
+        if (status !== STEP_STATUS.ACTIVE && status !== STEP_STATUS.AWAITING_CONFIRM) return;
         this._completeStep(step.step);
     }
 

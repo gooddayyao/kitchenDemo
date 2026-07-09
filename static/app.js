@@ -94,6 +94,7 @@ async function loadRecipe(recipeId) {
 
 function applyRecipe(recipe) {
     state.recipe = recipe;
+    state.confirmMessage = null;
     engine.loadRecipe(recipe);
     renderAll();
 }
@@ -115,10 +116,25 @@ function renderProgress() {
         const item = document.createElement("div");
         const st = engine.getStepStatus(step.step);
         item.className = `progress-step ${st}${step.step === engine.currentStep ? " current" : ""}`;
-        item.innerHTML = `<strong>Step ${step.step}</strong><span class="step-status">${statusLabel(st)}</span><p>${step.title}</p>`;
+        const subHint = Array.isArray(step.substeps) && step.substeps.length
+            ? `<small class="substep-hint">${step.substeps.length} 個子步驟</small>`
+            : "";
+        item.innerHTML = `<strong>Step ${step.step}</strong><span class="step-status">${statusLabel(st)}</span><p>${step.title}</p>${subHint}`;
         item.addEventListener("click", () => engine.goToStep(step.step));
         elements.progressList.appendChild(item);
     });
+}
+
+function formatInstruction(step) {
+    if (!step) return "";
+    let text = step.instruction || "";
+    if (Array.isArray(step.substeps) && step.substeps.length) {
+        const lines = step.substeps
+            .map((s) => `・${s.id ? `${s.id} ` : ""}${s.instruction}`)
+            .join("\n");
+        text = `${text}\n\n子步驟：\n${lines}`;
+    }
+    return text;
 }
 
 function renderProjection() {
@@ -127,16 +143,19 @@ function renderProjection() {
     const total = state.recipe.steps.length;
     const doneCount = state.recipe.steps.filter((s) => engine.getStepStatus(s.step) === STEP_STATUS.DONE).length;
     const timerText = formatTimer(engine.timerRemaining);
-    const hasTimer = step && step.timer_seconds > 0;
+    const hasTimer = step && step.timer_seconds > 0 && engine.getStepStatus(step.step) === STEP_STATUS.ACTIVE;
     const stepStatus = step ? engine.getStepStatus(step.step) : "";
+    const instruction = formatInstruction(step);
 
     const update = (titleEl, stepEl, instrEl, timerEl, timerWrapEl) => {
         titleEl.textContent = state.recipe.title;
         if (step) {
             stepEl.textContent = `Step ${step.step} / ${total} — ${step.title}`;
-            instrEl.textContent = step.instruction;
+            instrEl.textContent = instruction;
             timerEl.textContent = timerText;
-            timerWrapEl.style.display = hasTimer ? "block" : "none";
+            timerWrapEl.style.display = hasTimer || (step.timer_seconds > 0 && engine.timerRemaining > 0)
+                ? "block"
+                : (step.timer_seconds > 0 ? "block" : "none");
         }
     };
 
@@ -162,8 +181,15 @@ function renderProjection() {
         : "";
     elements.projectionFill.style.width = `${Math.round((doneCount / total) * 100)}%`;
 
-    const showConfirm = stepStatus === STEP_STATUS.AWAITING_CONFIRM ||
-        (step && step.completion === "manual_confirm" && stepStatus === STEP_STATUS.ACTIVE);
+    const needsManual =
+        step &&
+        (step.completion === "manual_confirm" ||
+            step.completion === "vision_heuristic" ||
+            step.completion === "marker_detect");
+    const showConfirm =
+        stepStatus === STEP_STATUS.AWAITING_CONFIRM ||
+        Boolean(state.confirmMessage) ||
+        (needsManual && stepStatus === STEP_STATUS.ACTIVE && !(step.timer_seconds > 0 && engine.timerRemaining > 0));
     elements.confirmStep.style.display = showConfirm ? "block" : "none";
     elements.confirmStepFS.style.display = showConfirm ? "block" : "none";
 
@@ -173,9 +199,13 @@ function renderProjection() {
 
 function renderSpatialOverlay() {
     if (!overlay) return;
+    const step = engine.getCurrentStep();
+    const displayStep = step
+        ? { ...step, instruction: formatInstruction(step) }
+        : null;
     overlay.render({
         recipe: state.recipe,
-        step: engine.getCurrentStep(),
+        step: displayStep,
         timerRemaining: engine.timerRemaining,
         confirmMessage: state.confirmMessage,
         showZones: state.showZones,
@@ -188,7 +218,7 @@ function renderAll() {
     renderProjection();
 }
 
-function enterProjectionMode() {
+async function enterProjectionMode() {
     state.isProjectionMode = true;
     elements.controlPanel.style.display = "none";
     elements.projectionMode.classList.add("active");
@@ -197,7 +227,9 @@ function enterProjectionMode() {
     state.dragOffsetY = 0;
     elements.projectionCardFullscreen.style.transform = "translate(0, 0)";
     overlay.resize();
-    vision.start().then(() => vision.startPolling(3000));
+    await vision.init(elements.cameraVideo, elements.cameraCanvas);
+    await vision.start();
+    vision.startPolling(3000);
     renderProjection();
 }
 
@@ -260,8 +292,14 @@ async function parseRecipeFromText() {
 }
 
 function bindEngine() {
+    let lastStep = null;
     engine.onChange = () => {
-        state.confirmMessage = null;
+        const step = engine.getCurrentStep();
+        const stepNum = step ? step.step : null;
+        if (stepNum !== lastStep) {
+            state.confirmMessage = null;
+            lastStep = stepNum;
+        }
         renderAll();
     };
     engine.onTimerTick = () => renderProjection();
@@ -275,8 +313,11 @@ function bindVision() {
     vision.onResult = (result) => {
         if (result.needs_confirm && result.message) {
             state.confirmMessage = result.message;
+        } else if (result.detected && result.confidence >= 0.6 && !result.needs_confirm) {
+            state.confirmMessage = null;
         }
         engine.applyVisionResult(result);
+        renderProjection();
     };
 }
 
@@ -284,6 +325,7 @@ async function init() {
     overlay = new SpatialOverlay(elements.spatialCanvas, calibration);
     await calibration.load();
     calibration.onUpdate = () => renderSpatialOverlay();
+    await vision.init(elements.cameraVideo, elements.cameraCanvas);
 
     bindEngine();
     bindVision();

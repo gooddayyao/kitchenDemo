@@ -91,6 +91,18 @@ def main() -> int:
             failures.append(f"vision analyze failed: {status} {vision}")
         elif vision.get("source") not in ("heuristic", "gemini"):
             failures.append(f"vision source missing: {vision}")
+        elif vision.get("source") == "heuristic" and (vision.get("detected") or not vision.get("needs_confirm")):
+            # Heuristic pot motion must stay conservative (no false auto-advance).
+            failures.append(f"vision heuristic too aggressive: {vision}")
+
+        status, marker = request("POST", "/api/vision/analyze", {
+            "image": img,
+            "step_context": {"completion": "marker_detect", "zone": "prep"},
+        })
+        if status != 200 or "confidence" not in marker:
+            failures.append(f"marker analyze failed: {status} {marker}")
+        elif marker.get("needs_confirm") is not True and marker.get("detected") is True and marker.get("confidence", 0) < 0.6:
+            failures.append(f"marker low confidence without confirm: {marker}")
 
     try:
         with urllib.request.urlopen(BASE + "/", timeout=10) as resp:

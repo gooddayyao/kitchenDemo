@@ -18,12 +18,13 @@ A spatial projection + semi-automatic camera cooking assistant for a fixed kitch
   - README and project scaffold
 
 ### Phase 2 — Structured Recipes and Step Engine
-- **Status:** In progress
+- **Status:** Completed
 - **Goals:**
   - Define recipe schema (`recipe_schema.json`, `data/recipes/*.json`)
   - Implement `/api/parse-recipe` with Gemini (fallback to local structured recipes)
   - Frontend Step Engine: `pending` → `active` → `awaiting_confirm` → `done`
   - Load recipes from API instead of hardcoded mock data
+- **Notes:** Parsed recipes are normalized to schema defaults; Gemini uses REST via `services/gemini_client.py` with rule-based fallback. Substeps are displayed in the step instruction UI (engine remains step-level for MVP).
 
 ### Phase 3 — Spatial Projection and Calibration
 - **Status:** In progress
@@ -34,11 +35,12 @@ A spatial projection + semi-automatic camera cooking assistant for a fixed kitch
   - Cut-line guidance templates projected on counter zones
 
 ### Phase 4 — Per-Step Timer
-- **Status:** In progress
+- **Status:** Completed
 - **Goals:**
   - Start countdown when step enters `active` and `timer_seconds > 0`
   - Display step timer near relevant zone (not total recipe remaining time)
   - On timer end → `awaiting_confirm` or auto-advance per `completion` rule
+- **Notes:** `completion === "timer"` auto-advances; other completion types wait for user confirm after countdown.
 
 ### Phase 5 — Semi-Automatic Camera Monitoring
 - **Status:** Completed (heuristic MVP); Gemini Vision extension added
@@ -50,7 +52,7 @@ A spatial projection + semi-automatic camera cooking assistant for a fixed kitch
 - **Phase 5 extension — Gemini Vision:**
   - When `GEMINI_API_KEY` is set, `/api/vision/analyze` uses Gemini image understanding via REST API
   - Falls back to local heuristics when API unavailable or confidence is low
-
+- **Notes:** Local stove heuristics stay below auto-advance threshold; only high-confidence Gemini/marker signals may auto-complete.
 ### Phase 6 — Voice Interaction (Auxiliary)
 - **Status:** Planned
 - **Goals:**
@@ -71,6 +73,15 @@ A spatial projection + semi-automatic camera cooking assistant for a fixed kitch
 3. Commit with a clear message.
 4. Push to `origin main`.
 5. On another machine, run `git pull origin main` before continuing.
+
+## Subprojects
+
+### recipe-generator（獨立微服務）
+- **Status:** Skeleton created
+- **Path:** `recipe-generator/`
+- **Goal:** 食譜影片 / URL / 文字 → CookingRecipe JSON（供手機 App 與主專案匯入）
+- **Docs:** `recipe-generator/ARCHITECTURE.md`
+- **Run:** `cd recipe-generator && start.bat`（port 8100）
 
 ## Notes
 - Hardware mounting is out of scope; software assumes fixed projector + camera with one-time calibration.

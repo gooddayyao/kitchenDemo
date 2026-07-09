@@ -85,7 +85,7 @@ class VisionMonitor {
     }
 
     async _analyze() {
-        if (!this.enabled || !this.stepContext) return;
+        if (!this.enabled || !this.stepContext || !this.ctx) return;
 
         const needsVision = ["vision_heuristic", "marker_detect"].includes(
             this.stepContext.completion
@@ -112,10 +112,24 @@ class VisionMonitor {
             });
             if (res.ok) {
                 const result = await res.json();
+                // Force conservative semantics for the step engine.
+                if (result.confidence < 0.6) {
+                    result.detected = false;
+                    result.needs_confirm = true;
+                }
                 if (this.onResult) this.onResult(result);
             }
         } catch (err) {
             console.warn("Vision analyze failed:", err);
+            if (this.onResult) {
+                this.onResult({
+                    detected: false,
+                    confidence: 0,
+                    needs_confirm: true,
+                    message: "視覺分析失敗，請手動確認",
+                    source: "none",
+                });
+            }
         }
     }
 }

@@ -56,7 +56,8 @@ Spatial projection + semi-automatic camera cooking assistant for a fixed kitchen
 - `POST /api/vision/analyze` — Analyze camera frame
 
 ## Current Status
-- **Completed:** Phase 1 UI scaffold; Phase 2–5 core implementation
+- **Completed:** Phase 1 UI scaffold; Phase 2 structured recipes + step engine; Phase 4 per-step timers; Phase 5 semi-auto vision (heuristic + optional Gemini)
+- **In progress:** Phase 3 spatial projection/homography polish
 - **Next:** Phase 6 voice Q&A (auxiliary); improve vision accuracy post-MVP
 
 ## Progress Sync
