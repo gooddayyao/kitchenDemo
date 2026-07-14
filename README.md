@@ -17,7 +17,7 @@ Spatial projection + semi-automatic camera cooking assistant for a fixed kitchen
 - `services/recipe_parser.py` — Gemini + rule-based recipe parsing
 - `services/vision.py` — Semi-auto vision heuristics
 - `data/recipes/` — Structured recipe JSON files
-- `recipe_schema.json` — Recipe JSON schema
+- `recipe_schema.json` — Web Recipe JSON schema（欄位說明見 [`RECIPE_FORMAT.md`](RECIPE_FORMAT.md)）
 - `static/` — Frontend (step engine, calibration, overlay, vision, app)
 
 ## Run the demo

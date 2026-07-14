@@ -18,9 +18,9 @@
 
 | 軌道 | 路徑 | 定位 | 狀態 |
 |------|------|------|------|
-| **A — CV 主線（本文件）** | `src/` | YOLOv8 + OpenCV 即時 AR / 投影 | 🆕 待開發 |
+| **A — CV 主線（本文件）** | `src/` | YOLOv8 + OpenCV 即時 AR / 投影 | 🔄 Phase 1 scaffold（Task 1.0–1.5） |
 | **B — Web Demo（參考/過渡）** | `main.py` + `static/` | FastAPI + Canvas 投影 demo | ✅ Phase 1–2、4–5 完成；Phase 3 進行中 |
-| **C — 食譜匯入** | `recipe-generator/` | 影片/文字 → 結構化 JSON | 🔄 骨架已建 |
+| **C — 食譜匯入** | `recipe-generator/` | 影片/文字 → 結構化 JSON | 🔄 文字 + 影片上傳可用；URL 待做 |
 
 ### 視覺技術分工
 
@@ -76,78 +76,40 @@
 ### Repo 目錄規劃
 
 ```text
-廚房1/
+kitchenDemo/
 ├── KITCHEN_MVP_PLAN.md       # 本文件（主計畫）
 ├── PROJECT_PLAN.md           # Web demo 工程進度
-├── src/                      # 【CV 主線 — 待建】
+├── requirements-cv.txt       # CV 主線依賴
+├── src/                      # 【CV 主線 — Phase 1】
 │   ├── config.py
 │   ├── recipe_manager.py
 │   ├── phone_test.py         # Phase 1 主程式
 │   ├── stream_reader.py      # RTSP + 斷線重連
 │   ├── detector.py           # YOLOv8
 │   ├── overlay_renderer.py   # 切線、bbox、buffer
-│   └── calibration.py        # Phase 2 homography
+│   └── calibration.py        # Phase 2（尚未）
 ├── main.py + static/         # Web demo（維護）
 ├── services/vision.py        # Gemini/heuristic（輔助軌道）
 ├── recipe-generator/         # 食譜匯入微服務
-├── data/recipes/             # 結構化食譜
-└── recipe_schema.json
+├── data/
+│   ├── recipes/              # 食譜實例（steak.json、cucumber_cv.json…）
+│   ├── kitchen_recipe_schema.json
+│   └── kitchen_detect_profile.json
+├── RECIPE_FORMAT.md          # 【食譜格式單一來源】各 MD 請連結此檔
+└── recipe_schema.json        # Web CookingRecipe schema
 ```
 
 ---
 
 ## 核心資料結構
 
-### 狀態機
+狀態機與**完整食譜欄位／枚舉／範例**以共用規格為準，請直接編輯並參考：
 
-所有軌道共用概念：`pending` → `active` → `awaiting_confirm` → `done`  
-（Web 已實作於 `static/step-engine.js`；CV 主線移植至 `src/recipe_manager.py`）
+→ **[`RECIPE_FORMAT.md`](RECIPE_FORMAT.md)**（Web CookingRecipe + KITCHEN CV、`trigger_condition`、與 Web 橋接）
 
-### KITCHEN 食譜格式（CV 主線優先）
+實例：`data/recipes/cucumber_cv.json`（CV）、`data/recipes/steak.json`（Web）。
 
-```json
-{
-  "recipe_name": "涼拌小黃瓜",
-  "current_step_index": 0,
-  "steps": [
-    {
-      "step_id": 0,
-      "instruction": "請將小黃瓜放置於砧板中央，並依提示切片",
-      "target_ingredient": "cucumber",
-      "expected_status": "sliced",
-      "trigger_condition": "target_count_increase"
-    },
-    {
-      "step_id": 1,
-      "instruction": "請將切好的小黃瓜推至右上角暫存區，並放上大蒜",
-      "target_ingredient": "garlic",
-      "expected_status": "placed",
-      "trigger_condition": "enter_dropzone"
-    }
-  ]
-}
-```
-
-### 觸發條件（trigger_condition）
-
-| 值 | 行為 | 實作 |
-|----|------|------|
-| `target_count_increase` | 目標數量 1 → >3 且持續 2 秒 | YOLO 計數 |
-| `enter_dropzone` | 食材/手進入虛擬方框且停留 ≥2 秒 | YOLO bbox ∩ dropzone |
-| `timer` | 倒數結束 | 沿用 Web demo 邏輯 |
-| `manual_confirm` | 使用者確認 | dropzone 或按鍵 |
-
-### Schema 橋接（與現有 `recipe_schema.json`）
-
-現有牛排/義麵食譜（`data/recipes/*.json`）使用 `zone`、`completion`、`guide_lines`。  
-CV 主線透過 `recipe_manager.py` adapter 轉換，**不立即修改**既有 schema。
-
-| 現有 (Web) | KITCHEN (CV) |
-|------------|--------------|
-| `completion: vision_heuristic` | 語意判斷 → 可選 Gemini |
-| `completion: manual_confirm` | `manual_confirm` / dropzone |
-| `guide_lines` on zone | 切線綁 YOLO bbox 中心 |
-| `zones.cutting_board` | 砧板 + dropzone 座標 |
+機器可讀 Schema：`recipe_schema.json`、`data/kitchen_recipe_schema.json`。
 
 ---
 
@@ -164,15 +126,15 @@ CV 主線透過 `recipe_manager.py` adapter 轉換，**不立即修改**既有 s
 
 ### 任務清單
 
-- [ ] **Task 1.0** — 建立 `src/config.py`、`src/recipe_manager.py`（涼拌小黃瓜範例）
-- [ ] **Task 1.1** — 串流讀取：`VideoCapture` RTSP/HTTP + 斷線重連；支援本地影片
-- [ ] **Task 1.2** — YOLOv8 核心：載入 `yolov8n.pt`；PoC 可用 banana/apple 代替；輸出 bbox
-- [ ] **Task 1.3** — 視覺疊加 + 遮擋緩衝：
+- [x] **Task 1.0** — 建立 `src/config.py`、`src/recipe_manager.py`（涼拌小黃瓜範例）
+- [x] **Task 1.1** — 串流讀取：`VideoCapture` RTSP/HTTP + 斷線重連；支援本地影片
+- [x] **Task 1.2** — YOLOv8 核心：載入 `yolov8n.pt`；PoC 可用 banana/apple 代替；輸出 bbox
+- [x] **Task 1.3** — 視覺疊加 + 遮擋緩衝：
   - 食材周圍橘/綠提示框
   - 依 bbox 中心繪製 3 條綠色虛線（切線）
   - 未偵測到時保留 UI **1.5 秒（45 幀 @30fps）** 再消失
-- [ ] **Task 1.4** — 狀態觸發：數量 1 → >3 持續 2 秒 → 自動下一步
-- [ ] **Task 1.5** — `phone_test.py` 主程式：整合上述模組，可從影片或 RTSP 啟動
+- [x] **Task 1.4** — 狀態觸發：數量 1 → >3 持續 2 秒 → 自動下一步
+- [x] **Task 1.5** — `phone_test.py` 主程式：整合上述模組，可從影片或 RTSP 啟動
 
 ### Phase 1 驗收標準
 
@@ -187,6 +149,20 @@ CV 主線透過 `recipe_manager.py` adapter 轉換，**不立即修改**既有 s
 1. 用本地影片檔代替 RTSP
 2. PoC 階段用 COCO 類別（apple/banana）代替食材
 3. 手動鍵盤觸發下一步（debug 用）
+
+### 啟動（本機）
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-cv.txt
+python -m src.phone_test --source path\to\fruit.mp4   # 建議含 banana/apple
+# 或 webcam：
+python -m src.phone_test --source 0
+# 或 IP Webcam RTSP：
+python -m src.phone_test --source rtsp://PHONE_IP:8080/h264_ulaw.sdp
+```
+
+鍵盤：`N` / `Space` 手動下一步；`Q` / `ESC` 結束。
 
 ---
 
@@ -278,6 +254,7 @@ numpy
 
 ## 相關文件
 
+- [`RECIPE_FORMAT.md`](RECIPE_FORMAT.md) — **食譜格式規格（共用，請在此改格式）**
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md) — Web demo 工程 Phase 與完成狀態
 - [`recipe-generator/ARCHITECTURE.md`](recipe-generator/ARCHITECTURE.md) — 食譜匯入服務
 - [`RECIPES.md`](RECIPES.md) — 食譜範例說明

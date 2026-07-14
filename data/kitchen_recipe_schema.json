@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "KitchenCvRecipe",
+  "description": "KITCHEN CV 主線食譜架構（與 Web 軌道 recipe_schema.json 分開）。編輯此檔可調整欄位與 trigger enum；實例見 data/recipes/*_cv.json。",
+  "type": "object",
+  "required": ["recipe_name", "steps"],
+  "properties": {
+    "recipe_name": {
+      "type": "string",
+      "description": "顯示用食譜名稱"
+    },
+    "current_step_index": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "起始步驟索引（0-based）"
+    },
+    "dropzone": {
+      "type": "object",
+      "description": "正規化畫面座標（0–1）的暫存／確認區",
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "minimum": 0, "maximum": 1 },
+        "h": { "type": "number", "minimum": 0, "maximum": 1 },
+        "label": { "type": "string", "default": "暫存確認區" }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["step_id", "instruction", "trigger_condition"],
+        "properties": {
+          "step_id": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "步驟唯一 id（建議從 0 遞增）"
+          },
+          "instruction": {
+            "type": "string",
+            "description": "投影／HUD 顯示的指引文字"
+          },
+          "target_ingredient": {
+            "type": ["string", "null"],
+            "description": "邏輯食材名（再經 detect profile 映射到 YOLO 類別）。可為 null。"
+          },
+          "expected_status": {
+            "type": "string",
+            "description": "語意狀態標註（sliced / placed / done…），目前僅供文件與未來擴充"
+          },
+          "trigger_condition": {
+            "type": "string",
+            "enum": [
+              "target_count_increase",
+              "enter_dropzone",
+              "timer",
+              "manual_confirm"
+            ],
+            "description": "步驟完成觸發條件（見下方 notes）"
+          },
+          "timer_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "僅 trigger_condition=timer 時使用"
+          },
+          "guide_lines": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否在目標 bbox 上繪製切線"
+          }
+        }
+      }
+    }
+  },
+  "notes": {
+    "trigger_condition": {
+      "target_count_increase": "目標 YOLO 物件數量 > count_to 且持續 count_hold_sec",
+      "enter_dropzone": "目標物件 bbox 與 dropzone 相交且持續 dropzone_hold_sec",
+      "timer": "進入步驟後倒數 timer_seconds，結束自動下一步",
+      "manual_confirm": "鍵盤 N/Space，或確認物件（預設滑鼠）進入 dropzone 停留"
+    },
+    "bridge_to_web": {
+      "completion.timer": "timer",
+      "completion.manual_confirm": "manual_confirm",
+      "guide_lines / guidance_type=cut_lines": "guide_lines=true",
+      "zones.prep": "可映射為 dropzone"
+    }
+  }
+}

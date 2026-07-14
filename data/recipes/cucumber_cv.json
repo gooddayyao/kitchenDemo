@@ -1,0 +1,37 @@
+{
+  "recipe_name": "涼拌小黃瓜",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "step_id": 0,
+      "instruction": "請將小黃瓜（PoC：香蕉）放置於畫面中央，並依提示切片",
+      "target_ingredient": "cucumber",
+      "expected_status": "sliced",
+      "trigger_condition": "target_count_increase",
+      "guide_lines": true
+    },
+    {
+      "step_id": 1,
+      "instruction": "請將切好的小黃瓜推至右上角暫存區，並放上大蒜（PoC：蘋果）",
+      "target_ingredient": "garlic",
+      "expected_status": "placed",
+      "trigger_condition": "enter_dropzone",
+      "guide_lines": false
+    },
+    {
+      "step_id": 2,
+      "instruction": "調味拌勻後，將實體滑鼠放入右上綠區停留約 2 秒確認（或按 N / Space）",
+      "target_ingredient": null,
+      "expected_status": "done",
+      "trigger_condition": "manual_confirm",
+      "guide_lines": false
+    }
+  ],
+  "dropzone": {
+    "x": 0.72,
+    "y": 0.08,
+    "w": 0.22,
+    "h": 0.22,
+    "label": "暫存確認區"
+  }
+}

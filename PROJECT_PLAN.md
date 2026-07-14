@@ -1,6 +1,7 @@
 # Project Plan: AI Cooking Assistant Projection Demo
 
 > **產品主計畫已整合至 [`KITCHEN_MVP_PLAN.md`](KITCHEN_MVP_PLAN.md)。**  
+> 食譜欄位／枚舉規格見 [`RECIPE_FORMAT.md`](RECIPE_FORMAT.md)。  
 > 本文件追蹤 **Web Demo 軌道**（FastAPI + `static/`）的工程 Phase 與完成狀態。  
 > **CV 主線**（YOLOv8 + OpenCV，`src/`）以 KITCHEN_MVP_PLAN 為準。
 

@@ -10,7 +10,8 @@
 | kitchenDemo 主專案 | 匯入外部食譜、取代或補強 `/api/parse-recipe` |
 | 其他服務 | 任何需要結構化料理步驟的應用 |
 
-**核心契約：** 輸出必須符合 `schemas/recipe_schema.json`，與主專案 `data/recipes/*.json` 格式一致。
+**核心契約：** 輸出必須符合 `schemas/recipe_schema.json`，與主專案 `data/recipes/*.json` 格式一致。  
+欄位規格文件：主專案 [`RECIPE_FORMAT.md`](../RECIPE_FORMAT.md)（Web CookingRecipe 一節）。
 
 ---
 
@@ -153,7 +154,7 @@ POST /v1/parse-recipe/video
 
 ## CookingRecipe 輸出規則
 
-與主專案 `recipe_schema.json` 對齊：
+與主專案 `recipe_schema.json` 對齊；人類可讀規格見 [`../RECIPE_FORMAT.md`](../RECIPE_FORMAT.md)：
 
 | 欄位 | 規則 |
 |------|------|

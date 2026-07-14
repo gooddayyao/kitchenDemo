@@ -51,5 +51,6 @@ python tests/test_health.py
 ## 與主專案關係
 
 - 輸出格式與 `../recipe_schema.json` 一致
+- 欄位規格見 [`../RECIPE_FORMAT.md`](../RECIPE_FORMAT.md)
 - 主專案 `kitchenDemo` 繼續負責投影、步驟引擎、相機監控
 - 本子專案專注「來源 → 結構化食譜」

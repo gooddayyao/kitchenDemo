@@ -1,0 +1,33 @@
+{
+  "description": "KITCHEN CV 偵測／觸發設定。改此檔即可調整 PoC 對應與門檻，無需改 Python。",
+  "yolo_model": "yolov8n.pt",
+  "yolo_conf": 0.35,
+  "yolo_iou": 0.45,
+  "confirm_object_class": "mouse",
+  "poc_class_map": {
+    "cucumber": "banana",
+    "garlic": "apple",
+    "banana": "banana",
+    "apple": "apple",
+    "mouse": "mouse"
+  },
+  "triggers": {
+    "count_from": 1,
+    "count_to": 3,
+    "count_hold_sec": 2.0,
+    "dropzone_hold_sec": 2.0
+  },
+  "default_dropzone": {
+    "x": 0.72,
+    "y": 0.08,
+    "w": 0.22,
+    "h": 0.22,
+    "label": "暫存確認區"
+  },
+  "overlay": {
+    "occlusion_buffer_sec": 1.5,
+    "assumed_fps": 30,
+    "cut_line_count": 3
+  },
+  "default_recipe": "cucumber_cv.json"
+}

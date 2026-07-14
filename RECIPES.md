@@ -1,6 +1,8 @@
 # 食譜範例（人類可讀 + 機器可讀對照）
 
-結構化 JSON 食譜位於 `data/recipes/`。每個步驟包含：
+> **欄位與枚舉定義見 [`RECIPE_FORMAT.md`](RECIPE_FORMAT.md)。** 本檔只放具體食譜對照，不維護格式規格。
+
+結構化 JSON 位於 `data/recipes/`。Web 步驟常用欄位摘要：
 - `zone`：投影區域（`cutting_board` / `stove` / `prep`）
 - `guidance_type`：`text` | `cut_lines` | `confirm_prep`
 - `timer_seconds`：進入步驟後才開始計時（0 表示不計時）
