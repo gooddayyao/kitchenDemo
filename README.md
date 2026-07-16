@@ -39,6 +39,16 @@ Spatial projection + semi-automatic camera cooking assistant for a fixed kitchen
    Or run `start.bat`.
 5. Open `http://127.0.0.1:8000` in Chrome or Edge.
 
+## Run CV preview (webcam / phone)
+```powershell
+.\start-webcam.bat          # 本機 / USB 鏡頭
+.\start-webcam.bat 1
+.\start-phone.bat           # 手機 IP Webcam（會詢問 IP）
+.\start-phone.bat 192.168.x.x
+```
+macOS / Linux：`./start-webcam.sh`、`./start-phone.sh`  
+或：`python -m src.phone_test --webcam`
+
 ## Usage
 1. Select a recipe (e.g. 香煎牛排) from the left panel.
 2. Click **校正投影區域** and click four counter corners in projection mode.

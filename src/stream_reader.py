@@ -75,14 +75,15 @@ class StreamReader:
         if isinstance(src, Path):
             src = str(src)
 
-        # FFMPEG backend tends to be more reliable for HTTP/RTSP on Windows.
-        if self._is_network:
-            self.cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
-        else:
-            self.cap = cv2.VideoCapture(src)
-
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Cannot open video source: {self.source}")
+        self.cap = self._open_capture(src)
+        if self.cap is None or not self.cap.isOpened():
+            hint = ""
+            if isinstance(self.source, int):
+                hint = (
+                    " Try another index (e.g. --webcam 1) or run "
+                    "`python -m src.phone_test --list-cameras`."
+                )
+            raise RuntimeError(f"Cannot open video source: {self.source}.{hint}")
 
         # Shrink capture buffer when supported (helps USB cam; mixed support for IP).
         try:
@@ -94,6 +95,17 @@ class StreamReader:
 
         if self.low_latency and (self._is_network or not self._is_file):
             self._start_grabber()
+
+    def _open_capture(self, src: SourceType) -> Optional[cv2.VideoCapture]:
+        """Open capture with a backend suited to the source type."""
+        if self._is_network:
+            return cv2.VideoCapture(src, cv2.CAP_FFMPEG)
+        if isinstance(src, int) and hasattr(cv2, "CAP_DSHOW"):
+            cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
+            if cap.isOpened():
+                return cap
+            cap.release()
+        return cv2.VideoCapture(src)
 
     def _start_grabber(self) -> None:
         self._running = True
@@ -137,12 +149,10 @@ class StreamReader:
         if isinstance(src, Path):
             src = str(src)
         old = self.cap
-        if self._is_network:
-            new_cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
-        else:
-            new_cap = cv2.VideoCapture(src)
-        if not new_cap.isOpened():
-            new_cap.release()
+        new_cap = self._open_capture(src)
+        if new_cap is None or not new_cap.isOpened():
+            if new_cap is not None:
+                new_cap.release()
             raise RuntimeError(f"Cannot reopen video source: {self.source}")
         try:
             new_cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)

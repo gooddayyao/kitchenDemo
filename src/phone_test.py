@@ -1,11 +1,17 @@
 """
-KITCHEN Phase 1 — phone / local-video AR preview.
+KITCHEN Phase 1 — phone / local-video / webcam AR preview.
 
 Usage:
+  # Easiest on Windows: double-click start-webcam.bat
+  start-webcam.bat
+  start-webcam.bat 1
+  start-webcam.bat --list
+
+  python -m src.phone_test --webcam
+  python -m src.phone_test --webcam 1
+  python -m src.phone_test --list-cameras
   python -m src.phone_test --source path/to/video.mp4
-  python -m src.phone_test --source 0
   python -m src.phone_test --source rtsp://192.168.x.x:8080/h264_ulaw.sdp
-  # IP Webcam HTTP (lower latency than browser page; still prefer RTSP if available):
   python -m src.phone_test --source http://192.168.x.x:8080/video
 
 Low-latency tips (IP Webcam):
@@ -25,6 +31,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from typing import List
 
 import cv2
 
@@ -49,12 +56,61 @@ def window_closed(window_name: str) -> bool:
         return True
 
 
+def list_cameras(max_index: int = 6) -> List[int]:
+    """Probe local camera indices; return those that open and return a frame."""
+    # Silence OpenCV noise while probing missing indices (DSHOW/obsensor spam).
+    prev_level = None
+    try:
+        prev_level = cv2.utils.logging.getLogLevel()
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
+    except Exception:
+        pass
+
+    found: List[int] = []
+    try:
+        for i in range(max_index):
+            backends = []
+            if hasattr(cv2, "CAP_DSHOW"):
+                backends.append(cv2.CAP_DSHOW)
+            backends.append(cv2.CAP_ANY)
+            for backend in backends:
+                cap = cv2.VideoCapture(i, backend)
+                if not cap.isOpened():
+                    cap.release()
+                    continue
+                ok, frame = cap.read()
+                cap.release()
+                if ok and frame is not None:
+                    found.append(i)
+                    break
+    finally:
+        if prev_level is not None:
+            try:
+                cv2.utils.logging.setLogLevel(prev_level)
+            except Exception:
+                pass
+    return found
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="KITCHEN Phase 1 AR preview (YOLOv8 + OpenCV)")
     p.add_argument(
         "--source",
-        default=str(config.DEFAULT_SOURCE),
-        help="Webcam index, video file path, or RTSP/HTTP URL",
+        default=None,
+        help="Webcam index, video file path, or RTSP/HTTP URL (default: 0 if no --webcam)",
+    )
+    p.add_argument(
+        "--webcam",
+        nargs="?",
+        const="0",
+        default=None,
+        metavar="INDEX",
+        help="Use PC / USB webcam (default index 0). Example: --webcam 1",
+    )
+    p.add_argument(
+        "--list-cameras",
+        action="store_true",
+        help="List available local webcam indices and exit",
     )
     p.add_argument(
         "--recipe",
@@ -80,8 +136,29 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def resolve_source(args: argparse.Namespace) -> str:
+    if args.webcam is not None:
+        return str(args.webcam)
+    if args.source is not None:
+        return str(args.source)
+    return str(config.DEFAULT_SOURCE)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.list_cameras:
+        print("Scanning local cameras (index 0–5)…")
+        found = list_cameras()
+        if not found:
+            print("No cameras found. Check USB connection / privacy settings.")
+            return 1
+        print("Available camera index(es):", ", ".join(str(i) for i in found))
+        print("Launch with:  start-webcam.bat <index>")
+        print("         or:  python -m src.phone_test --webcam <index>")
+        return 0
+
+    source = resolve_source(args)
     recipe_path = Path(args.recipe)
     if not recipe_path.exists():
         print(f"Recipe not found: {recipe_path}", file=sys.stderr)
@@ -92,17 +169,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Loading YOLO model: {args.model} …")
     detector = Detector(model_name=args.model, conf=args.conf, device=args.device)
     print(f"Recipe: {manager.name}")
-    print(f"Source: {args.source}")
+    print(f"Source: {source}")
     print("PoC class map:", config.POC_CLASS_MAP)
     print(f"Latency: detect_every={args.detect_every}, infer_width={args.infer_width}")
 
     try:
-        stream = StreamReader(args.source, loop_file=not args.no_loop, low_latency=True)
+        stream = StreamReader(source, loop_file=not args.no_loop, low_latency=True)
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         print(
-            "Hint: for no-camera dev, pass --source path/to/video.mp4 "
-            "(use banana/apple footage for PoC).",
+            "Hint: try --webcam 1, or --list-cameras, or --source path/to/video.mp4.",
             file=sys.stderr,
         )
         return 1

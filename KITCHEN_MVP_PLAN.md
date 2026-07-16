@@ -152,14 +152,33 @@ kitchenDemo/
 
 ### 啟動（本機）
 
+**雙擊 / 腳本（建議）：**
+
+| 用途 | Windows | macOS / Linux / Git Bash |
+|------|---------|---------------------------|
+| 本機 / USB 鏡頭 | `start-webcam.bat` | `./start-webcam.sh` |
+| 手機 IP Webcam | `start-phone.bat` | `./start-phone.sh` |
+
+```powershell
+.\start-webcam.bat          # 預設鏡頭 index 0
+.\start-webcam.bat 1        # 第二顆 USB webcam
+.\start-webcam.bat --list
+
+.\start-phone.bat                      # 互動輸入 IP
+.\start-phone.bat 192.168.31.140       # HTTP /video
+.\start-phone.bat rtsp://192.168.31.140:8080/h264_ulaw.sdp
+```
+
+**命令列：**
+
 ```powershell
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-cv.txt
-python -m src.phone_test --source path\to\fruit.mp4   # 建議含 banana/apple
-# 或 webcam：
-python -m src.phone_test --source 0
-# 或 IP Webcam RTSP：
-python -m src.phone_test --source rtsp://PHONE_IP:8080/h264_ulaw.sdp
+python -m src.phone_test --webcam
+python -m src.phone_test --webcam 1
+python -m src.phone_test --list-cameras
+python -m src.phone_test --source http://PHONE_IP:8080/video
+python -m src.phone_test --source path\to\fruit.mp4
 ```
 
 鍵盤：`N` / `Space` 手動下一步；`Q` / `ESC` 結束。
