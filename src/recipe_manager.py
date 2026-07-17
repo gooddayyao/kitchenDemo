@@ -27,6 +27,8 @@ class Detection:
     y1: float
     x2: float
     y2: float
+    # Optional outline (Nx1x2 or Nx2 int/float). When set, overlay draws contour instead of box.
+    contour: Optional[Any] = None
 
     @property
     def cx(self) -> float:
@@ -56,11 +58,13 @@ class RecipeManager:
     message: str = ""
     hold_progress: float = 0.0  # 0..1 while a hold trigger is filling
     mouse_confirm_progress: float = 0.0  # 0..1 mouse-in-dropzone confirm
+    ingredient_confirmed: Dict[str, bool] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.statuses = {
             int(step["step_id"]): StepStatus.PENDING for step in self.recipe["steps"]
         }
+        self.ingredient_confirmed = {ing["id"]: False for ing in self.required_ingredients()}
         start = int(self.recipe.get("current_step_index", 0))
         self._activate(start)
 
@@ -120,6 +124,45 @@ class RecipeManager:
     def name(self) -> str:
         return str(self.recipe.get("recipe_name", "recipe"))
 
+    def required_ingredients(self) -> List[Dict[str, str]]:
+        """Recipe ingredient checklist items: [{id, label}, ...]."""
+        raw = self.recipe.get("ingredients")
+        if isinstance(raw, list) and raw:
+            items: List[Dict[str, str]] = []
+            for entry in raw:
+                if not isinstance(entry, dict):
+                    continue
+                ing_id = str(entry.get("id") or "").strip()
+                if not ing_id:
+                    continue
+                label = str(entry.get("label") or ing_id).strip()
+                items.append({"id": ing_id, "label": label})
+            return items
+
+        # Fallback: unique target_ingredient from steps
+        seen: set = set()
+        items = []
+        for step in self.recipe.get("steps") or []:
+            target = step.get("target_ingredient")
+            if not target or target in seen:
+                continue
+            seen.add(target)
+            items.append({"id": str(target), "label": str(target)})
+        return items
+
+    def ingredient_checklist(self) -> List[Dict[str, Any]]:
+        """Checklist rows for overlay: id, label, confirmed."""
+        rows: List[Dict[str, Any]] = []
+        for ing in self.required_ingredients():
+            rows.append(
+                {
+                    "id": ing["id"],
+                    "label": ing["label"],
+                    "confirmed": bool(self.ingredient_confirmed.get(ing["id"], False)),
+                }
+            )
+        return rows
+
     @property
     def dropzone(self) -> Dict[str, float]:
         dz = self.recipe.get("dropzone") or config.DEFAULT_DROPZONE
@@ -149,7 +192,27 @@ class RecipeManager:
     def resolve_yolo_class(self, target: Optional[str]) -> Optional[str]:
         if not target:
             return None
-        return config.POC_CLASS_MAP.get(target, target)
+        mapped = config.POC_CLASS_MAP.get(target, target)
+        # Recipe targets may use catalog ids; cucumber stays "cucumber" for color detector.
+        return mapped
+
+    def _match_detections(self, detections: Sequence[Detection], target: Optional[str]) -> List[Detection]:
+        """Match detections by catalog id or YOLO class name."""
+        if not target:
+            return []
+        yolo = self.resolve_yolo_class(target)
+        aliases = {target, yolo}
+        try:
+            from src.ingredient_catalog import item_by_id
+
+            item = item_by_id(str(target))
+            if item and item.get("yolo"):
+                aliases.add(str(item["yolo"]))
+            if item and item.get("id"):
+                aliases.add(str(item["id"]))
+        except Exception:
+            pass
+        return [d for d in detections if d.name in aliases]
 
     def _activate(self, index: int) -> None:
         steps = self.recipe.get("steps") or []
@@ -181,7 +244,29 @@ class RecipeManager:
             return
         self._complete(int(step["step_id"]))
 
+    def reset(self) -> None:
+        """Restart demo from the first step without reloading the recipe file."""
+        self.statuses = {
+            int(step["step_id"]): StepStatus.PENDING for step in self.recipe["steps"]
+        }
+        self.ingredient_confirmed = {ing["id"]: False for ing in self.required_ingredients()}
+        self.timer_remaining = 0.0
+        self._timer_end_at = None
+        self._condition_since = None
+        self._mouse_confirm_since = None
+        self.hold_progress = 0.0
+        self.mouse_confirm_progress = 0.0
+        start = int(self.recipe.get("current_step_index", 0))
+        self._activate(start)
+        self.message = self.current_step().get("instruction") if self.current_step() else "重新開始"
+
     def _complete(self, step_id: int) -> None:
+        step = None
+        for s in self.recipe.get("steps") or []:
+            if int(s["step_id"]) == step_id:
+                step = s
+                break
+
         self.statuses[step_id] = StepStatus.DONE
         self._condition_since = None
         self._mouse_confirm_since = None
@@ -189,9 +274,16 @@ class RecipeManager:
         self.timer_remaining = 0.0
         self.hold_progress = 0.0
         self.mouse_confirm_progress = 0.0
+
+        # Demo: tick ingredient checkbox only after the cutting step finishes.
+        if step and step.get("confirm_on_complete"):
+            target = step.get("target_ingredient")
+            if target:
+                self.ingredient_confirmed[str(target)] = True
+
         next_index = self.current_index + 1
         if next_index >= len(self.recipe.get("steps") or []):
-            self.message = "食譜完成！"
+            self.message = "Demo 完成！"
             return
         self._activate(next_index)
 
@@ -216,8 +308,9 @@ class RecipeManager:
             return
 
         trigger = step.get("trigger_condition") or "manual_confirm"
-        target = self.resolve_yolo_class(step.get("target_ingredient"))
-        matched = [d for d in detections if target and d.name == target]
+        raw_target = step.get("target_ingredient")
+        target = self.resolve_yolo_class(raw_target)
+        matched = self._match_detections(detections, str(raw_target) if raw_target else None)
 
         if trigger == "timer":
             if self._timer_end_at is not None:
@@ -227,6 +320,12 @@ class RecipeManager:
             return
 
         if trigger == "manual_confirm":
+            return
+
+        if trigger == "target_present":
+            # Ingredient entered frame — advance after a short hold.
+            held = len(matched) >= max(1, config.COUNT_FROM)
+            self._update_hold(held, now, config.PRESENT_HOLD_SEC, sid)
             return
 
         if trigger == "target_count_increase":

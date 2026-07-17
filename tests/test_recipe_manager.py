@@ -42,8 +42,8 @@ class RecipeManagerTests(unittest.TestCase):
         )
 
     def test_poc_class_map(self) -> None:
-        self.assertEqual(self.mgr.resolve_yolo_class("cucumber"), "banana")
-        self.assertEqual(self.mgr.resolve_yolo_class("garlic"), "apple")
+        self.assertEqual(self.mgr.resolve_yolo_class("cucumber"), "cucumber")
+        self.assertEqual(self.mgr.resolve_yolo_class("garlic"), "garlic")
 
     def test_manual_confirm(self) -> None:
         self.mgr.confirm()
@@ -51,14 +51,14 @@ class RecipeManagerTests(unittest.TestCase):
         self.assertEqual(self.mgr.current_index, 1)
 
     def test_count_trigger_hold(self) -> None:
-        # Map cucumber → banana; need >3 bananas for hold
-        bananas = [
-            Detection("banana", 0.9, 10 + i * 20, 10, 25 + i * 20, 40) for i in range(4)
+        # Need >3 cucumbers for hold
+        pieces = [
+            Detection("cucumber", 0.9, 10 + i * 20, 10, 25 + i * 20, 40) for i in range(4)
         ]
         t0 = time.monotonic()
-        self.mgr.update(bananas, 200, 200, now=t0)
+        self.mgr.update(pieces, 200, 200, now=t0)
         self.assertEqual(self.mgr.statuses[0], StepStatus.ACTIVE)
-        self.mgr.update(bananas, 200, 200, now=t0 + 2.1)
+        self.mgr.update(pieces, 200, 200, now=t0 + 2.1)
         self.assertEqual(self.mgr.statuses[0], StepStatus.DONE)
 
     def test_mouse_confirm_in_dropzone(self) -> None:
@@ -93,6 +93,52 @@ class RecipeManagerTests(unittest.TestCase):
         )
         self.assertEqual(mgr.name, "香煎牛排")
         self.assertEqual(mgr.current_step()["trigger_condition"], "manual_confirm")
+
+    def test_cucumber_demo_flow(self) -> None:
+        """Wait for cucumber → cut step with confirm_on_complete → checklist ticks."""
+        mgr = RecipeManager(
+            recipe={
+                "recipe_name": "demo",
+                "ingredients": [{"id": "cucumber", "label": "小黃瓜"}],
+                "steps": [
+                    {
+                        "step_id": 0,
+                        "instruction": "place cucumber",
+                        "target_ingredient": "cucumber",
+                        "trigger_condition": "target_present",
+                        "guide_lines": False,
+                    },
+                    {
+                        "step_id": 1,
+                        "instruction": "cut 1cm",
+                        "target_ingredient": "cucumber",
+                        "trigger_condition": "manual_confirm",
+                        "guide_lines": True,
+                        "cut_spacing_mm": 10,
+                        "confirm_on_complete": True,
+                    },
+                ],
+            }
+        )
+        self.assertFalse(mgr.ingredient_checklist()[0]["confirmed"])
+        cucumber = [Detection("cucumber", 0.9, 10, 10, 40, 40)]
+        t0 = time.monotonic()
+        mgr.update(cucumber, 200, 200, now=t0)
+        self.assertEqual(mgr.current_index, 0)
+        self.assertFalse(mgr.ingredient_checklist()[0]["confirmed"])
+        mgr.update(cucumber, 200, 200, now=t0 + 1.0)
+        self.assertEqual(mgr.statuses[0], StepStatus.DONE)
+        self.assertEqual(mgr.current_index, 1)
+        self.assertTrue(mgr.current_step()["guide_lines"])
+        self.assertFalse(mgr.ingredient_checklist()[0]["confirmed"])
+        mgr.confirm()
+        self.assertTrue(mgr.is_finished())
+        self.assertTrue(mgr.ingredient_checklist()[0]["confirmed"])
+        self.assertEqual(mgr.message, "Demo 完成！")
+        mgr.reset()
+        self.assertEqual(mgr.current_index, 0)
+        self.assertFalse(mgr.is_finished())
+        self.assertFalse(mgr.ingredient_checklist()[0]["confirmed"])
 
 
 if __name__ == "__main__":

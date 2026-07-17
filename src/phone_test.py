@@ -20,7 +20,8 @@ Low-latency tips (IP Webcam):
   - Same 5GHz Wi-Fi; disable phone power-saving for the app
 
 Keys:
-  Physical mouse in green zone ~2s — confirm / next step (YOLO class "mouse")
+  R           — restart demo from step 1
+  C           — calibrate cutting-board scale (click 4 corners + set cm)
   N / Space  — manual confirm / next step
   Q / ESC / window X  — quit
 """
@@ -31,7 +32,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import cv2
 
@@ -40,10 +41,14 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import config
+from src.cucumber_detector import detect_cucumber
+from src.detection_merge import merge_produce_and_yolo
 from src.detector import Detector
+from src.ingredient_catalog import label_for, summarize_detectable, yolo_class_names
 from src.overlay_renderer import OverlayRenderer
-from src.recipe_manager import RecipeManager
-from src.stream_reader import StreamReader
+from src.recipe_manager import Detection, RecipeManager
+from src.scale_calibrator import PlaneScale, ScaleCalibrator
+from src.stream_reader import StreamReader, is_image_source, parse_source
 
 
 def window_closed(window_name: str) -> bool:
@@ -133,15 +138,75 @@ def build_parser() -> argparse.ArgumentParser:
         default=640,
         help="Resize width before YOLO (0 = full res). Lower = faster, less lag.",
     )
+    p.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="Force cutting-board scale calibration at startup",
+    )
+    p.add_argument(
+        "--image",
+        default=None,
+        metavar="PATH",
+        help="Use a still image of cucumber (jpg/png). Skips YOLO; treats image as cucumber.",
+    )
     return p
 
 
 def resolve_source(args: argparse.Namespace) -> str:
+    if args.image is not None:
+        return str(args.image)
     if args.webcam is not None:
         return str(args.webcam)
     if args.source is not None:
         return str(args.source)
     return str(config.DEFAULT_SOURCE)
+
+
+def synthetic_cucumber(frame) -> Detection:
+    """Place an elongated cucumber bbox at frame center for image demos."""
+    h, w = frame.shape[:2]
+    bw = max(40, int(w * 0.55))
+    bh = max(24, int(h * 0.20))
+    cx, cy = w // 2, int(h * 0.55)
+    return Detection(
+        name="cucumber",
+        conf=0.99,
+        x1=float(cx - bw // 2),
+        y1=float(cy - bh // 2),
+        x2=float(cx + bw // 2),
+        y2=float(cy + bh // 2),
+    )
+
+
+def _read_frame(stream: StreamReader):
+    ok, frame = stream.read()
+    if ok and frame is not None:
+        return frame
+    return None
+
+
+def wait_for_frame(stream: StreamReader, timeout_sec: float = 20.0):
+    """Block until the stream delivers a real frame (important for phone IP Webcam)."""
+    import time
+
+    deadline = time.monotonic() + timeout_sec
+    last_log = 0.0
+    while time.monotonic() < deadline:
+        frame = _read_frame(stream)
+        if frame is not None:
+            return frame
+        now = time.monotonic()
+        if now - last_log > 2.0:
+            print("[stream] waiting for first camera frame…")
+            last_log = now
+        time.sleep(0.05)
+    return None
+
+
+def run_scale_calibration(stream: StreamReader) -> Optional[PlaneScale]:
+    # Same window as main preview so the camera feed is visible while calibrating.
+    calibrator = ScaleCalibrator(window_name=config.WINDOW_NAME)
+    return calibrator.run(lambda: _read_frame(stream))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -166,24 +231,74 @@ def main(argv: list[str] | None = None) -> int:
 
     manager = RecipeManager.from_path(recipe_path)
     renderer = OverlayRenderer()
-    print(f"Loading YOLO model: {args.model} …")
-    detector = Detector(model_name=args.model, conf=args.conf, device=args.device)
+    image_demo = is_image_source(parse_source(source))
+
+    detector = None
+    if image_demo:
+        print("[image-demo] Still image mode — cucumber bbox on image (no YOLO).")
+    else:
+        print(f"Loading YOLO model: {args.model} …")
+        detector = Detector(model_name=args.model, conf=args.conf, device=args.device)
+
     print(f"Recipe: {manager.name}")
     print(f"Source: {source}")
-    print("PoC class map:", config.POC_CLASS_MAP)
-    print(f"Latency: detect_every={args.detect_every}, infer_width={args.infer_width}")
+    print("Class map:", config.POC_CLASS_MAP)
+    print("Detectable now:", summarize_detectable())
+    if not image_demo:
+        print(f"Latency: detect_every={args.detect_every}, infer_width={args.infer_width}")
 
     try:
         stream = StreamReader(source, loop_file=not args.no_loop, low_latency=True)
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         print(
-            "Hint: try --webcam 1, or --list-cameras, or --source path/to/video.mp4.",
+            "Hint: try --image path\\to\\cucumber.jpg, or --webcam 1, or --list-cameras.",
             file=sys.stderr,
         )
         return 1
 
+    # Open main window early and wait until camera frames actually arrive.
     cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
+    first_frame = wait_for_frame(stream, timeout_sec=25.0)
+    if first_frame is None:
+        print(
+            "[stream] No camera frame received. Check phone IP Webcam / USB cam.",
+            file=sys.stderr,
+        )
+        stream.release()
+        cv2.destroyAllWindows()
+        return 1
+    cv2.imshow(config.WINDOW_NAME, first_frame)
+    cv2.waitKey(1)
+    print("[stream] camera frame OK")
+
+    plane_scale = PlaneScale.load()
+    if args.calibrate or plane_scale is None:
+        if plane_scale is None:
+            print("[scale] No saved calibration — please mark the cutting board.")
+        else:
+            print("[scale] Recalibrating (--calibrate).")
+        calibrated = run_scale_calibration(stream)
+        if calibrated is not None:
+            plane_scale = calibrated
+        elif plane_scale is None:
+            print(
+                "[scale] Skipped. Cut lines will use equal-split fallback until you press C.",
+                file=sys.stderr,
+            )
+        # Recreate clean main window (removes calibration trackbars).
+        try:
+            cv2.destroyWindow(config.WINDOW_NAME)
+        except cv2.error:
+            pass
+        cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
+    else:
+        print(
+            f"[scale] Loaded {config.SCALE_CALIBRATION_PATH.name}: "
+            f"{plane_scale.width_mm/10:.0f}x{plane_scale.height_mm/10:.0f} cm, "
+            f"{plane_scale.mm_per_px:.4f} mm/px  (press C to redo)"
+        )
+
     last_log = 0.0
     frame_i = 0
     detections = []
@@ -206,28 +321,55 @@ def main(argv: list[str] | None = None) -> int:
             h, w = frame.shape[:2]
             step = manager.current_step()
             yolo_target = manager.resolve_yolo_class(step.get("target_ingredient") if step else None)
-            class_filter = list(config.DETECT_CLASSES)
 
             frame_i += 1
-            if frame_i % detect_every == 0:
-                infer = frame
-                scale = 1.0
-                if args.infer_width and w > args.infer_width:
-                    scale = args.infer_width / float(w)
-                    infer = cv2.resize(frame, (args.infer_width, int(h * scale)))
-                detections = detector.detect(infer, class_filter=class_filter)
-                if scale != 1.0:
-                    inv = 1.0 / scale
-                    for d in detections:
-                        d.x1 *= inv
-                        d.y1 *= inv
-                        d.x2 *= inv
-                        d.y2 *= inv
+            if image_demo:
+                detections = [synthetic_cucumber(frame)]
+            elif frame_i % detect_every == 0:
+                detections = []
+                produce = detect_cucumber(frame)
+                yolo_dets: list = []
+                if detector is not None:
+                    infer = frame
+                    scale = 1.0
+                    if args.infer_width and w > args.infer_width:
+                        scale = args.infer_width / float(w)
+                        infer = cv2.resize(frame, (args.infer_width, int(h * scale)))
+                    yolo_filter = list(
+                        dict.fromkeys([*yolo_class_names(), config.CONFIRM_OBJECT_CLASS])
+                    )
+                    yolo_dets = detector.detect(infer, class_filter=yolo_filter)
+                    if scale != 1.0:
+                        inv = 1.0 / scale
+                        for d in yolo_dets:
+                            d.x1 *= inv
+                            d.y1 *= inv
+                            d.x2 *= inv
+                            d.y2 *= inv
+                # Prefer cucumber contour over YOLO knife/fork false positives.
+                detections = merge_produce_and_yolo(frame, produce, yolo_dets)
 
             manager.update(detections, w, h)
 
             step = manager.current_step()
             draw_cuts = bool(step and step.get("guide_lines"))
+            cut_spacing_mm = None
+            if step and step.get("cut_spacing_mm") is not None:
+                try:
+                    cut_spacing_mm = float(step["cut_spacing_mm"])
+                except (TypeError, ValueError):
+                    cut_spacing_mm = None
+
+            mm_per_px = plane_scale.mm_per_px if plane_scale else None
+            if draw_cuts and cut_spacing_mm and mm_per_px:
+                scale_hint = f"cut {cut_spacing_mm:.0f}mm  ({mm_per_px:.3f} mm/px)"
+            elif draw_cuts and not mm_per_px:
+                scale_hint = "need scale: press C"
+            elif plane_scale:
+                scale_hint = f"scale {plane_scale.mm_per_px:.3f} mm/px"
+            else:
+                scale_hint = "no scale"
+
             step_label = (
                 f"{manager.name}  ·  step {manager.current_index + 1}/"
                 f"{len(manager.recipe.get('steps') or [])}"
@@ -242,11 +384,15 @@ def main(argv: list[str] | None = None) -> int:
                 detections,
                 highlight_class=yolo_target,
                 draw_cut_lines=draw_cuts,
+                cut_spacing_mm=cut_spacing_mm,
+                mm_per_px=mm_per_px,
                 dropzone=manager.dropzone,
                 instruction=manager.message,
                 step_label=step_label,
                 timer_remaining=manager.timer_remaining,
                 hold_progress=hold if hold > 0 else None,
+                scale_hint=scale_hint,
+                ingredients=manager.ingredient_checklist(),
             )
 
             cv2.imshow(config.WINDOW_NAME, overlay)
@@ -259,6 +405,19 @@ def main(argv: list[str] | None = None) -> int:
             key = cv2.waitKey(1) & 0xFF
             if key in (27, ord("q")) or window_closed(config.WINDOW_NAME):
                 break
+            if key in (ord("r"), ord("R")):
+                manager.reset()
+                renderer.buffer.clear()
+                print("[demo] restarted")
+            if key in (ord("c"), ord("C")):
+                calibrated = run_scale_calibration(stream)
+                if calibrated is not None:
+                    plane_scale = calibrated
+                try:
+                    cv2.destroyWindow(config.WINDOW_NAME)
+                except cv2.error:
+                    pass
+                cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
             if key in (ord("n"), ord("N"), 32):  # Space
                 manager.confirm()
                 if manager.is_finished():

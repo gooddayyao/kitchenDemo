@@ -9,6 +9,24 @@
       "type": "string",
       "description": "顯示用食譜名稱"
     },
+    "ingredients": {
+      "type": "array",
+      "description": "食譜所需食材清單（左上角 checklist）",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "邏輯食材 id（經 detect profile 映射到 YOLO）"
+          },
+          "label": {
+            "type": "string",
+            "description": "畫面顯示名稱（支援中文）"
+          }
+        }
+      }
+    },
     "current_step_index": {
       "type": "integer",
       "minimum": 0,
@@ -55,6 +73,7 @@
             "type": "string",
             "enum": [
               "target_count_increase",
+              "target_present",
               "enter_dropzone",
               "timer",
               "manual_confirm"
@@ -71,6 +90,16 @@
             "type": "boolean",
             "default": false,
             "description": "是否在目標 bbox 上繪製切線"
+          },
+          "cut_spacing_mm": {
+            "type": "number",
+            "minimum": 0,
+            "description": "切線間距（毫米）。需先完成砧板尺度校正；例如 10 = 1 公分薄片"
+          },
+          "confirm_on_complete": {
+            "type": "boolean",
+            "default": false,
+            "description": "步驟完成時，將 target_ingredient 在右上角 checklist 打勾"
           }
         }
       }
@@ -78,6 +107,7 @@
   },
   "notes": {
     "trigger_condition": {
+      "target_present": "目標物件進入畫面且持續 present_hold_sec",
       "target_count_increase": "目標 YOLO 物件數量 > count_to 且持續 count_hold_sec",
       "enter_dropzone": "目標物件 bbox 與 dropzone 相交且持續 dropzone_hold_sec",
       "timer": "進入步驟後倒數 timer_seconds，結束自動下一步",
@@ -87,6 +117,7 @@
       "completion.timer": "timer",
       "completion.manual_confirm": "manual_confirm",
       "guide_lines / guidance_type=cut_lines": "guide_lines=true",
+      "cut_spacing_mm": "切線真實間距（mm）；需 data/scale_calibration.json",
       "zones.prep": "可映射為 dropzone"
     }
   }

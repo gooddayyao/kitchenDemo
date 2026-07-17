@@ -17,6 +17,7 @@ DATA_DIR = REPO_ROOT / "data"
 RECIPES_DIR = DATA_DIR / "recipes"
 KITCHEN_RECIPE_SCHEMA = DATA_DIR / "kitchen_recipe_schema.json"
 KITCHEN_DETECT_PROFILE = DATA_DIR / "kitchen_detect_profile.json"
+SCALE_CALIBRATION_PATH = DATA_DIR / "scale_calibration.json"
 
 
 def _load_json(path: Path) -> Dict[str, Any]:
@@ -40,21 +41,35 @@ YOLO_IOU = float(_PROFILE.get("yolo_iou", 0.45))
 POC_CLASS_MAP: Dict[str, str] = dict(
     _PROFILE.get("poc_class_map")
     or {
-        "cucumber": "banana",
-        "garlic": "apple",
-        "banana": "banana",
-        "apple": "apple",
+        "cucumber": "cucumber",
+        "garlic": "garlic",
         "mouse": "mouse",
     }
 )
 CONFIRM_OBJECT_CLASS = str(_PROFILE.get("confirm_object_class", "mouse"))
-DETECT_CLASSES = sorted({*POC_CLASS_MAP.values(), CONFIRM_OBJECT_CLASS})
+
+# Prefer catalog YOLO classes when available; fall back to poc map values.
+def _detect_classes_from_profile() -> list:
+    try:
+        from src.ingredient_catalog import yolo_class_names
+
+        names = set(yolo_class_names())
+    except Exception:
+        names = set()
+    names.update(POC_CLASS_MAP.values())
+    names.add(CONFIRM_OBJECT_CLASS)
+    names.add("cucumber")  # color heuristic id / display name
+    return sorted(names)
+
+
+DETECT_CLASSES = _detect_classes_from_profile()
 
 _TRIGGERS = dict(_PROFILE.get("triggers") or {})
 COUNT_HOLD_SEC = float(_TRIGGERS.get("count_hold_sec", 2.0))
 COUNT_FROM = int(_TRIGGERS.get("count_from", 1))
 COUNT_TO = int(_TRIGGERS.get("count_to", 3))
 DROPZONE_HOLD_SEC = float(_TRIGGERS.get("dropzone_hold_sec", 2.0))
+PRESENT_HOLD_SEC = float(_TRIGGERS.get("present_hold_sec", 0.8))
 
 DEFAULT_DROPZONE = dict(
     _PROFILE.get("default_dropzone")
@@ -75,7 +90,13 @@ WINDOW_NAME = "KITCHEN AR Preview"
 
 # Valid trigger_condition values (kept in sync with kitchen_recipe_schema.json)
 VALID_TRIGGERS = frozenset(
-    {"target_count_increase", "enter_dropzone", "timer", "manual_confirm"}
+    {
+        "target_count_increase",
+        "target_present",
+        "enter_dropzone",
+        "timer",
+        "manual_confirm",
+    }
 )
 
 
@@ -83,7 +104,7 @@ def reload_detect_profile() -> None:
     """Reload kitchen_detect_profile.json into module-level constants (for tests/tools)."""
     global _PROFILE, YOLO_MODEL, YOLO_CONF, YOLO_IOU, POC_CLASS_MAP
     global CONFIRM_OBJECT_CLASS, DETECT_CLASSES
-    global COUNT_HOLD_SEC, COUNT_FROM, COUNT_TO, DROPZONE_HOLD_SEC
+    global COUNT_HOLD_SEC, COUNT_FROM, COUNT_TO, DROPZONE_HOLD_SEC, PRESENT_HOLD_SEC
     global DEFAULT_DROPZONE, ASSUMED_FPS, OCCLUSION_BUFFER_SEC
     global OCCLUSION_BUFFER_FRAMES, CUT_LINE_COUNT, DEFAULT_CV_RECIPE
 
@@ -93,12 +114,13 @@ def reload_detect_profile() -> None:
     YOLO_IOU = float(_PROFILE.get("yolo_iou", 0.45))
     POC_CLASS_MAP = dict(_PROFILE.get("poc_class_map") or POC_CLASS_MAP)
     CONFIRM_OBJECT_CLASS = str(_PROFILE.get("confirm_object_class", "mouse"))
-    DETECT_CLASSES = sorted({*POC_CLASS_MAP.values(), CONFIRM_OBJECT_CLASS})
+    DETECT_CLASSES = _detect_classes_from_profile()
     triggers = dict(_PROFILE.get("triggers") or {})
     COUNT_HOLD_SEC = float(triggers.get("count_hold_sec", 2.0))
     COUNT_FROM = int(triggers.get("count_from", 1))
     COUNT_TO = int(triggers.get("count_to", 3))
     DROPZONE_HOLD_SEC = float(triggers.get("dropzone_hold_sec", 2.0))
+    PRESENT_HOLD_SEC = float(triggers.get("present_hold_sec", 0.8))
     DEFAULT_DROPZONE = dict(_PROFILE.get("default_dropzone") or DEFAULT_DROPZONE)
     overlay = dict(_PROFILE.get("overlay") or {})
     ASSUMED_FPS = int(overlay.get("assumed_fps", 30))

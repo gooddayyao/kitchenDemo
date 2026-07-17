@@ -1,21 +1,38 @@
 {
-  "description": "KITCHEN CV 偵測／觸發設定。改此檔即可調整 PoC 對應與門檻，無需改 Python。",
+  "description": "KITCHEN CV detect/trigger profile. Edit this file to adjust mappings and thresholds.",
   "yolo_model": "yolov8n.pt",
   "yolo_conf": 0.35,
   "yolo_iou": 0.45,
   "confirm_object_class": "mouse",
   "poc_class_map": {
-    "cucumber": "banana",
-    "garlic": "apple",
+    "cucumber": "cucumber",
     "banana": "banana",
     "apple": "apple",
+    "orange": "orange",
+    "broccoli": "broccoli",
+    "carrot": "carrot",
+    "sandwich": "sandwich",
+    "hot_dog": "hot dog",
+    "pizza": "pizza",
+    "donut": "donut",
+    "cake": "cake",
+    "bottle": "bottle",
+    "bowl": "bowl",
+    "cup": "cup",
+    "wine_glass": "wine glass",
+    "fork": "fork",
+    "knife": "knife",
+    "spoon": "spoon",
+    "dining_table": "dining table",
+    "garlic": "garlic",
     "mouse": "mouse"
   },
   "triggers": {
     "count_from": 1,
     "count_to": 3,
     "count_hold_sec": 2.0,
-    "dropzone_hold_sec": 2.0
+    "dropzone_hold_sec": 2.0,
+    "present_hold_sec": 0.8
   },
   "default_dropzone": {
     "x": 0.72,

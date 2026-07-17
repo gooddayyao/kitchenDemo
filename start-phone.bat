@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
-setlocal enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
-REM KITCHEN Phase 1 — 手機 IP Webcam
-REM 用法：
+REM KITCHEN Phase 1 — phone IP Webcam
+REM Usage:
 REM   start-phone.bat
 REM   start-phone.bat 192.168.31.140
 REM   start-phone.bat 192.168.31.140:8080
@@ -13,61 +13,64 @@ REM   start-phone.bat rtsp://192.168.31.140:8080/h264_ulaw.sdp
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [錯誤] 找不到 .venv，請先：
+    echo [ERROR] .venv not found. Run:
     echo   python -m venv .venv
-    echo   .\.venv\Scripts\Activate.ps1
-    echo   pip install -r requirements-cv.txt
+    echo   .\.venv\Scripts\python.exe -m pip install -r requirements-cv.txt
     pause
     exit /b 1
 )
 
 set "ARG=%~1"
-if "%ARG%"=="" (
+if "!ARG!"=="" (
     echo ========================================
-    echo  KITCHEN AR — 手機 IP Webcam
+    echo  KITCHEN AR — phone IP Webcam
     echo ========================================
-    echo  1. 手機安裝 IP Webcam，與 PC 同一 Wi-Fi
-    echo  2. App 按 Start server，記下 IP
+    echo  1. Install IP Webcam on phone
+    echo  2. PC joins phone hotspot / same Wi-Fi
+    echo  3. App: Start server, note the IP
     echo.
-    set /p ARG="請輸入手機 IP 或完整 URL: "
+    set /p ARG="Enter phone IP or full URL: "
 )
 
-if "%ARG%"=="" (
-    echo [取消] 未輸入位址
+REM trim spaces
+for /f "tokens=* delims= " %%A in ("!ARG!") do set "ARG=%%A"
+
+if "!ARG!"=="" (
+    echo [cancel] no address entered
     pause
     exit /b 1
 )
 
-REM 若已是完整 URL，直接使用；否則組出 HTTP /video
-echo %ARG% | findstr /I /B "http:// https:// rtsp:// rtsps://" >nul
-if %ERRORLEVEL%==0 (
-    set "SOURCE=%ARG%"
+REM Build SOURCE with delayed expansion only (avoids empty IP bug)
+set "SOURCE="
+echo !ARG!| findstr /I /B /C:"http://" /C:"https://" /C:"rtsp://" /C:"rtsps://" >nul
+if !ERRORLEVEL! EQU 0 (
+    set "SOURCE=!ARG!"
 ) else (
-    set "HOST=%ARG%"
-    echo %HOST% | findstr ":" >nul
-    if errorlevel 1 set "HOST=%HOST%:8080"
+    set "HOST=!ARG!"
+    echo !HOST!| findstr ":" >nul
+    if !ERRORLEVEL! NEQ 0 set "HOST=!HOST!:8080"
     set "SOURCE=http://!HOST!/video"
 )
 
 echo.
 echo ========================================
-echo  KITCHEN AR — 手機 IP Webcam
-echo  Source: %SOURCE%
-echo  關閉：Q / ESC / 視窗 X
+echo  KITCHEN AR — phone IP Webcam
+echo  Source: !SOURCE!
+echo  Quit: Q / ESC / window X
 echo ========================================
 echo.
 
-REM 手機串流延遲較高，預設較省資源
-.\.venv\Scripts\python.exe -m src.phone_test --source "%SOURCE%" --detect-every 3 --infer-width 480
-set "EXITCODE=%ERRORLEVEL%"
+.\.venv\Scripts\python.exe -m src.phone_test --source "!SOURCE!" --detect-every 3 --infer-width 480
+set "EXITCODE=!ERRORLEVEL!"
 
-if not "%EXITCODE%"=="0" (
+if not "!EXITCODE!"=="0" (
     echo.
-    echo [失敗] 無法開啟串流：%SOURCE%
-    echo 請確認手機已 Start server，且 IP / 防火牆正確。
-    echo 也可試 RTSP：
-    echo   start-phone.bat rtsp://手機IP:8080/h264_ulaw.sdp
+    echo [FAIL] cannot open stream: !SOURCE!
+    echo Check: phone Start server, IP correct, same hotspot/Wi-Fi.
+    echo Try RTSP:
+    echo   start-phone.bat rtsp://PHONE_IP:8080/h264_ulaw.sdp
     pause
 )
 
-exit /b %EXITCODE%
+exit /b !EXITCODE!

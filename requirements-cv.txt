@@ -1,4 +1,5 @@
-# CV mainline (KITCHEN Phase 1) — install alongside or instead of headless OpenCV
+# CV mainline (KITCHEN Phase 1)
 ultralytics>=8.0.0
 opencv-python>=4.8.0
 numpy>=1.24.0
+Pillow>=10.0.0

@@ -14,6 +14,8 @@ from src import config
 
 SourceType = Union[str, int, Path]
 
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
+
 
 def parse_source(source: Optional[str] = None) -> SourceType:
     raw = source if source is not None else config.DEFAULT_SOURCE
@@ -26,6 +28,14 @@ def parse_source(source: Optional[str] = None) -> SourceType:
     if path.exists():
         return path
     return text  # RTSP / HTTP URL
+
+
+def is_image_source(source: SourceType) -> bool:
+    if isinstance(source, Path):
+        return source.suffix.lower() in _IMAGE_EXTS
+    if isinstance(source, str) and not _is_network_source(source):
+        return Path(source).suffix.lower() in _IMAGE_EXTS
+    return False
 
 
 def _is_network_source(source: SourceType) -> bool:
@@ -54,7 +64,9 @@ class StreamReader:
         self.low_latency = low_latency
         self.cap: Optional[cv2.VideoCapture] = None
         self._fail_count = 0
-        self._is_file = isinstance(self.source, Path) or (
+        self._still_image: Optional[np.ndarray] = None
+        self._is_image = is_image_source(self.source)
+        self._is_file = self._is_image or isinstance(self.source, Path) or (
             isinstance(self.source, str)
             and not _is_network_source(self.source)
             and Path(self.source).exists()
@@ -74,6 +86,14 @@ class StreamReader:
         src: SourceType = self.source
         if isinstance(src, Path):
             src = str(src)
+
+        if self._is_image:
+            img = cv2.imread(str(src))
+            if img is None:
+                raise RuntimeError(f"Cannot read image: {self.source}")
+            self._still_image = img
+            self._fail_count = 0
+            return
 
         self.cap = self._open_capture(src)
         if self.cap is None or not self.cap.isOpened():
@@ -170,6 +190,7 @@ class StreamReader:
         if self.cap is not None:
             self.cap.release()
             self.cap = None
+        self._still_image = None
         with self._lock:
             self._latest = None
             self._latest_ok = False
@@ -183,6 +204,9 @@ class StreamReader:
             return False
 
     def read(self) -> Tuple[bool, Optional[np.ndarray]]:
+        if self._still_image is not None:
+            return True, self._still_image.copy()
+
         # Low-latency path: return newest frame from grabber thread.
         if self._thread is not None and self._running:
             with self._lock:

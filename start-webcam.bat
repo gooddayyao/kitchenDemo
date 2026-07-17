@@ -32,7 +32,8 @@ if not "%~1"=="" set "CAM_INDEX=%~1"
 echo ========================================
 echo  KITCHEN AR — 本機 / USB Webcam
 echo  Camera index: %CAM_INDEX%
-echo  關閉：Q / ESC / 視窗 X
+echo  首次請點砧板四角並用拉桿輸入長寬(cm)
+echo  按鍵：C 校正尺度 / N Space 下一步 / Q 離開
 echo ========================================
 echo.
 
