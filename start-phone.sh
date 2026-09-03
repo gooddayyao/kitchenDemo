@@ -49,7 +49,7 @@ echo
 echo "========================================"
 echo " KITCHEN AR — 手機 IP Webcam"
 echo " Source: $SOURCE"
-echo " 關閉：Q / ESC / 視窗 X"
+echo " 畫面上方按鈕：重新開始 / 校正尺度 / 下一步 / 離開"
 echo "========================================"
 
 exec "$PYTHON" -m src.phone_test --source "$SOURCE" --detect-every 3 --infer-width 480

@@ -58,10 +58,14 @@ class StreamReader:
         source: Optional[str] = None,
         loop_file: bool = True,
         low_latency: bool = True,
+        *,
+        strict: bool = True,
     ) -> None:
         self.source = parse_source(source)
         self.loop_file = loop_file
         self.low_latency = low_latency
+        self.strict = strict
+        self.last_error: Optional[str] = None
         self.cap: Optional[cv2.VideoCapture] = None
         self._fail_count = 0
         self._still_image: Optional[np.ndarray] = None
@@ -81,8 +85,14 @@ class StreamReader:
 
         self.open()
 
+    def is_ready(self) -> bool:
+        if self._still_image is not None:
+            return True
+        return self.cap is not None and self.cap.isOpened()
+
     def open(self) -> None:
         self.release()
+        self.last_error = None
         src: SourceType = self.source
         if isinstance(src, Path):
             src = str(src)
@@ -90,7 +100,8 @@ class StreamReader:
         if self._is_image:
             img = cv2.imread(str(src))
             if img is None:
-                raise RuntimeError(f"Cannot read image: {self.source}")
+                self._fail_open(f"Cannot read image: {self.source}")
+                return
             self._still_image = img
             self._fail_count = 0
             return
@@ -103,7 +114,11 @@ class StreamReader:
                     " Try another index (e.g. --webcam 1) or run "
                     "`python -m src.phone_test --list-cameras`."
                 )
-            raise RuntimeError(f"Cannot open video source: {self.source}.{hint}")
+            if self.cap is not None:
+                self.cap.release()
+                self.cap = None
+            self._fail_open(f"Cannot open video source: {self.source}.{hint}")
+            return
 
         # Shrink capture buffer when supported (helps USB cam; mixed support for IP).
         try:
@@ -115,6 +130,11 @@ class StreamReader:
 
         if self.low_latency and (self._is_network or not self._is_file):
             self._start_grabber()
+
+    def _fail_open(self, message: str) -> None:
+        self.last_error = message.strip()
+        if self.strict:
+            raise RuntimeError(self.last_error)
 
     def _open_capture(self, src: SourceType) -> Optional[cv2.VideoCapture]:
         """Open capture with a backend suited to the source type."""
@@ -215,8 +235,7 @@ class StreamReader:
             return False, None
 
         if self.cap is None:
-            if not self.reconnect():
-                return False, None
+            return False, None
         assert self.cap is not None
 
         # Drain a few buffered frames for non-threaded path.

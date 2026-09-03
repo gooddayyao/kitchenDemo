@@ -1,0 +1,37 @@
+{
+  "id": "cucumber_slice",
+  "title": "小黃瓜切片 Demo",
+  "ingredients": [
+    { "id": "cucumber", "name": "小黃瓜", "quantity": "1 條", "prep": "切 1cm 薄片" }
+  ],
+  "zones": {
+    "cutting_board": { "label": "砧板區", "x": 0.08, "y": 0.18, "w": 0.38, "h": 0.52 },
+    "prep": { "label": "備料區", "x": 0.08, "y": 0.74, "w": 0.82, "h": 0.18 }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "title": "放入小黃瓜",
+      "instruction": "請將小黃瓜放入畫面",
+      "zone": "cutting_board",
+      "guidance_type": "confirm_prep",
+      "timer_seconds": 0,
+      "completion": "vision_heuristic",
+      "target_ingredient": "cucumber",
+      "trigger_condition": "target_present"
+    },
+    {
+      "step": 2,
+      "title": "切成 1cm 薄片",
+      "instruction": "小黃瓜切為 1 公分薄片（完成按 N / Space）",
+      "zone": "cutting_board",
+      "guidance_type": "cut_lines",
+      "timer_seconds": 0,
+      "completion": "manual_confirm",
+      "target_ingredient": "cucumber",
+      "cut_spacing_mm": 10,
+      "confirm_on_complete": true,
+      "checklist_label": "切成 1cm 薄片"
+    }
+  ]
+}

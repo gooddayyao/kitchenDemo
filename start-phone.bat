@@ -57,7 +57,7 @@ echo.
 echo ========================================
 echo  KITCHEN AR — phone IP Webcam
 echo  Source: !SOURCE!
-echo  Quit: Q / ESC / window X
+echo  畫面上方按鈕：重新開始 / 校正尺度 / 下一步 / 離開
 echo ========================================
 echo.
 

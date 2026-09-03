@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from src import config
 
@@ -29,6 +29,8 @@ class Detection:
     y2: float
     # Optional outline (Nx1x2 or Nx2 int/float). When set, overlay draws contour instead of box.
     contour: Optional[Any] = None
+    locked: bool = False
+    glow_color: Optional[Tuple[int, int, int]] = None
 
     @property
     def cx(self) -> float:
@@ -71,48 +73,109 @@ class RecipeManager:
     @classmethod
     def from_path(cls, path: Path | str) -> "RecipeManager":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if cls._is_web_recipe(data):
+            return cls.from_web_recipe(data)
         return cls(recipe=data)
+
+    @staticmethod
+    def _is_web_recipe(data: Dict[str, Any]) -> bool:
+        """CookingRecipe uses steps[].step; KITCHEN CV uses steps[].step_id."""
+        steps = data.get("steps") or []
+        if not isinstance(steps, list) or not steps:
+            return bool(data.get("title") and not data.get("recipe_name"))
+        first = steps[0] if isinstance(steps[0], dict) else {}
+        return "step" in first and "step_id" not in first
+
+    @staticmethod
+    def _web_ingredients(web: Dict[str, Any]) -> List[Dict[str, str]]:
+        items: List[Dict[str, str]] = []
+        seen: set = set()
+        try:
+            from src.ingredient_catalog import id_for_label
+        except Exception:
+            id_for_label = lambda _n: None  # type: ignore
+
+        for entry in web.get("ingredients") or []:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or entry.get("label") or "").strip()
+            ing_id = str(entry.get("id") or "").strip() or (id_for_label(name) if name else None) or ""
+            if not ing_id:
+                continue
+            if ing_id in seen:
+                continue
+            seen.add(ing_id)
+            label = name
+            if not label:
+                try:
+                    from src.ingredient_catalog import label_for
+
+                    label = label_for(ing_id)
+                except Exception:
+                    label = ing_id
+            items.append({"id": ing_id, "label": label or ing_id})
+        return items
+
+    @staticmethod
+    def _trigger_from_web_step(raw: Dict[str, Any]) -> str:
+        explicit = str(raw.get("trigger_condition") or "").strip()
+        if explicit in config.VALID_TRIGGERS:
+            return explicit
+        completion = str(raw.get("completion") or "manual_confirm")
+        if completion == "timer":
+            return "timer"
+        if completion == "marker_detect":
+            return "enter_dropzone"
+        if completion == "vision_heuristic":
+            return "target_present" if raw.get("target_ingredient") else "manual_confirm"
+        return "manual_confirm"
 
     @classmethod
     def from_web_recipe(cls, web: Dict[str, Any]) -> "RecipeManager":
-        """Adapter: existing Web demo schema → KITCHEN CV format (no schema mutation)."""
+        """Adapter: CookingRecipe (recipe-generator / Web) → KITCHEN CV runtime."""
         dropzone = dict(config.DEFAULT_DROPZONE)
         zones = web.get("zones") or {}
-        if "prep" in zones:
-            z = zones["prep"]
+        zone_key = "prep" if "prep" in zones else ("cutting_board" if "cutting_board" in zones else None)
+        if zone_key:
+            z = zones[zone_key]
             dropzone = {
                 "x": float(z.get("x", dropzone["x"])),
                 "y": float(z.get("y", dropzone["y"])),
                 "w": float(z.get("w", dropzone["w"])),
                 "h": float(z.get("h", dropzone["h"])),
-                "label": z.get("label", "備料區"),
+                "label": z.get("label", dropzone.get("label", "備料區")),
             }
 
         steps: List[Dict[str, Any]] = []
         for raw in web.get("steps") or []:
-            completion = raw.get("completion", "manual_confirm")
-            if completion == "timer":
-                trigger = "timer"
-            elif completion == "manual_confirm":
-                trigger = "manual_confirm"
-            else:
-                trigger = "manual_confirm"
-            steps.append(
-                {
-                    "step_id": int(raw.get("step", len(steps) + 1)) - 1,
-                    "instruction": raw.get("instruction") or raw.get("title") or "",
-                    "target_ingredient": None,
-                    "expected_status": completion,
-                    "trigger_condition": trigger,
-                    "timer_seconds": int(raw.get("timer_seconds") or 0),
-                    "guide_lines": bool(raw.get("guide_lines"))
-                    or raw.get("guidance_type") == "cut_lines",
-                }
-            )
+            if not isinstance(raw, dict):
+                continue
+            gl = raw.get("guide_lines")
+            guide = gl is True or isinstance(gl, dict) or raw.get("guidance_type") == "cut_lines"
+            target = raw.get("target_ingredient")
+            cv_step: Dict[str, Any] = {
+                "step_id": int(raw.get("step", len(steps) + 1)) - 1,
+                "instruction": raw.get("instruction") or raw.get("title") or "",
+                "target_ingredient": target,
+                "expected_status": raw.get("expected_status") or raw.get("completion"),
+                "trigger_condition": cls._trigger_from_web_step(raw),
+                "timer_seconds": int(raw.get("timer_seconds") or 0),
+                "guide_lines": bool(guide),
+            }
+            if raw.get("cut_spacing_mm") is not None:
+                cv_step["cut_spacing_mm"] = float(raw["cut_spacing_mm"])
+            if raw.get("checklist_label"):
+                cv_step["checklist_label"] = str(raw["checklist_label"])
+            elif raw.get("title") and cv_step["trigger_condition"] != "target_present":
+                cv_step["checklist_label"] = str(raw["title"])
+            if raw.get("confirm_on_complete"):
+                cv_step["confirm_on_complete"] = True
+            steps.append(cv_step)
 
         kitchen = {
             "recipe_name": web.get("title") or web.get("id") or "web-recipe",
             "current_step_index": 0,
+            "ingredients": cls._web_ingredients(web),
             "steps": steps,
             "dropzone": dropzone,
             "_source": "web_adapter",
@@ -151,14 +214,44 @@ class RecipeManager:
         return items
 
     def ingredient_checklist(self) -> List[Dict[str, Any]]:
-        """Checklist rows for overlay: id, label, confirmed."""
+        """Checklist tree for overlay: ingredient row + visible prep sub-items."""
+        steps = list(self.recipe.get("steps") or [])
+        current = self.current_step()
+        current_sid = int(current["step_id"]) if current else None
         rows: List[Dict[str, Any]] = []
         for ing in self.required_ingredients():
+            ing_id = ing["id"]
+            parent_confirmed = bool(self.ingredient_confirmed.get(ing_id, False))
+            children: List[Dict[str, Any]] = []
+            parent_active = False
+            for step in steps:
+                if str(step.get("target_ingredient") or "") != ing_id:
+                    continue
+                sid = int(step["step_id"])
+                trigger = str(step.get("trigger_condition") or "")
+                if trigger == "target_present":
+                    parent_active = current_sid == sid
+                    continue
+                children.append(
+                    {
+                        "id": f"step:{sid}",
+                        "step_id": sid,
+                        "label": str(
+                            step.get("checklist_label")
+                            or step.get("instruction")
+                            or f"步驟 {sid}"
+                        ),
+                        "confirmed": self.statuses.get(sid) == StepStatus.DONE,
+                        "active": current_sid == sid,
+                    }
+                )
             rows.append(
                 {
-                    "id": ing["id"],
+                    "id": ing_id,
                     "label": ing["label"],
-                    "confirmed": bool(self.ingredient_confirmed.get(ing["id"], False)),
+                    "confirmed": parent_confirmed,
+                    "active": parent_active and not parent_confirmed,
+                    "children": children if parent_confirmed else [],
                 }
             )
         return rows
@@ -275,10 +368,11 @@ class RecipeManager:
         self.hold_progress = 0.0
         self.mouse_confirm_progress = 0.0
 
-        # Demo: tick ingredient checkbox only after the cutting step finishes.
-        if step and step.get("confirm_on_complete"):
+        # Tick the ingredient when it is found; later steps become sub-items.
+        if step:
             target = step.get("target_ingredient")
-            if target:
+            trigger = str(step.get("trigger_condition") or "")
+            if target and (trigger == "target_present" or step.get("confirm_on_complete")):
                 self.ingredient_confirmed[str(target)] = True
 
         next_index = self.current_index + 1

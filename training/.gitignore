@@ -1,0 +1,17 @@
+# Keep empty folders; ignore photos, labels, and training artifacts.
+
+dataset/images/train/*
+!dataset/images/train/.gitkeep
+dataset/images/val/*
+!dataset/images/val/.gitkeep
+dataset/labels/train/*
+!dataset/labels/train/.gitkeep
+dataset/labels/val/*
+!dataset/labels/val/.gitkeep
+
+runs/
+weights/
+*.pt
+*.onnx
+*.engine
+*.cache

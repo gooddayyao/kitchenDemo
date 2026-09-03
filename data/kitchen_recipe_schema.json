@@ -99,7 +99,11 @@
           "confirm_on_complete": {
             "type": "boolean",
             "default": false,
-            "description": "步驟完成時，將 target_ingredient 在右上角 checklist 打勾"
+            "description": "步驟完成時，將 target_ingredient 在 checklist 打勾（target_present 完成時也會打勾）"
+          },
+          "checklist_label": {
+            "type": "string",
+            "description": "食材列底下的子項目短標（例如「切成 1cm 薄片」）；缺省則用 instruction"
           }
         }
       }

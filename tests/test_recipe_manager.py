@@ -94,6 +94,25 @@ class RecipeManagerTests(unittest.TestCase):
         self.assertEqual(mgr.name, "香煎牛排")
         self.assertEqual(mgr.current_step()["trigger_condition"], "manual_confirm")
 
+    def test_import_cooking_recipe_cucumber_demo(self) -> None:
+        from src import config
+
+        mgr = RecipeManager.from_path(config.RECIPES_DIR / "cucumber.json")
+        self.assertEqual(mgr.name, "小黃瓜切片 Demo")
+        self.assertEqual(mgr.required_ingredients()[0]["id"], "cucumber")
+        self.assertEqual(mgr.current_step()["trigger_condition"], "target_present")
+        self.assertEqual(mgr.current_step()["target_ingredient"], "cucumber")
+        cucumber = [Detection("cucumber", 0.9, 10, 10, 40, 40)]
+        t0 = time.monotonic()
+        mgr.update(cucumber, 200, 200, now=t0)
+        mgr.update(cucumber, 200, 200, now=t0 + 1.0)
+        self.assertEqual(mgr.recipe.get("_source"), "web_adapter")
+        self.assertEqual(mgr.current_index, 1)
+        self.assertTrue(mgr.ingredient_checklist()[0]["confirmed"])
+        self.assertTrue(mgr.current_step()["guide_lines"])
+        self.assertEqual(mgr.current_step().get("cut_spacing_mm"), 10)
+        self.assertEqual(mgr.ingredient_checklist()[0]["children"][0]["label"], "切成 1cm 薄片")
+
     def test_cucumber_demo_flow(self) -> None:
         """Wait for cucumber → cut step with confirm_on_complete → checklist ticks."""
         mgr = RecipeManager(
@@ -116,11 +135,13 @@ class RecipeManagerTests(unittest.TestCase):
                         "guide_lines": True,
                         "cut_spacing_mm": 10,
                         "confirm_on_complete": True,
+                        "checklist_label": "切成 1cm 薄片",
                     },
                 ],
             }
         )
         self.assertFalse(mgr.ingredient_checklist()[0]["confirmed"])
+        self.assertEqual(mgr.ingredient_checklist()[0]["children"], [])
         cucumber = [Detection("cucumber", 0.9, 10, 10, 40, 40)]
         t0 = time.monotonic()
         mgr.update(cucumber, 200, 200, now=t0)
@@ -130,15 +151,22 @@ class RecipeManagerTests(unittest.TestCase):
         self.assertEqual(mgr.statuses[0], StepStatus.DONE)
         self.assertEqual(mgr.current_index, 1)
         self.assertTrue(mgr.current_step()["guide_lines"])
-        self.assertFalse(mgr.ingredient_checklist()[0]["confirmed"])
+        self.assertTrue(mgr.ingredient_checklist()[0]["confirmed"])
+        children = mgr.ingredient_checklist()[0]["children"]
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0]["label"], "切成 1cm 薄片")
+        self.assertFalse(children[0]["confirmed"])
+        self.assertTrue(children[0]["active"])
         mgr.confirm()
         self.assertTrue(mgr.is_finished())
         self.assertTrue(mgr.ingredient_checklist()[0]["confirmed"])
+        self.assertTrue(mgr.ingredient_checklist()[0]["children"][0]["confirmed"])
         self.assertEqual(mgr.message, "Demo 完成！")
         mgr.reset()
         self.assertEqual(mgr.current_index, 0)
         self.assertFalse(mgr.is_finished())
         self.assertFalse(mgr.ingredient_checklist()[0]["confirmed"])
+        self.assertEqual(mgr.ingredient_checklist()[0]["children"], [])
 
 
 if __name__ == "__main__":

@@ -19,11 +19,11 @@ Low-latency tips (IP Webcam):
   - Use /video or RTSP, not the web browser preview page
   - Same 5GHz Wi-Fi; disable phone power-saving for the app
 
-Keys:
-  R           — restart demo from step 1
-  C           — calibrate cutting-board scale (click 4 corners + set cm)
-  N / Space  — manual confirm / next step
-  Q / ESC / window X  — quit
+Keys / on-screen buttons (top row):
+  重新開始 (R)     — restart demo from step 1
+  校正尺度 (C)     — calibrate cutting-board scale
+  下一步 (N/Space) — manual confirm / next step
+  離開 (Q/ESC)     — quit
 """
 
 from __future__ import annotations
@@ -35,13 +35,14 @@ from pathlib import Path
 from typing import List, Optional
 
 import cv2
+import numpy as np
 
 # Allow `python src/phone_test.py` as well as `python -m src.phone_test`
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import config
-from src.cucumber_detector import detect_cucumber
+from src.detection_lock import DetectionLock
 from src.detection_merge import merge_produce_and_yolo
 from src.detector import Detector
 from src.ingredient_catalog import label_for, summarize_detectable, yolo_class_names
@@ -49,6 +50,18 @@ from src.overlay_renderer import OverlayRenderer
 from src.recipe_manager import Detection, RecipeManager
 from src.scale_calibrator import PlaneScale, ScaleCalibrator
 from src.stream_reader import StreamReader, is_image_source, parse_source
+
+
+def key_to_action(key: int) -> Optional[str]:
+    if key in (27, ord("q"), ord("Q")):
+        return "quit"
+    if key in (ord("r"), ord("R")):
+        return "restart"
+    if key in (ord("c"), ord("C")):
+        return "calibrate"
+    if key in (ord("n"), ord("N"), 32):
+        return "next"
+    return None
 
 
 def window_closed(window_name: str) -> bool:
@@ -120,7 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--recipe",
         default=str(config.DEFAULT_CV_RECIPE),
-        help="KITCHEN CV recipe JSON path",
+        help="Recipe JSON path (CookingRecipe or KITCHEN CV)",
     )
     p.add_argument("--model", default=config.YOLO_MODEL, help="Ultralytics model weights")
     p.add_argument("--conf", type=float, default=config.YOLO_CONF, help="YOLO confidence")
@@ -185,9 +198,35 @@ def _read_frame(stream: StreamReader):
     return None
 
 
+def describe_stream_error(
+    source: object,
+    detail: Optional[str] = None,
+    *,
+    no_frame: bool = False,
+) -> str:
+    src = str(source)
+    extra = (detail or "").strip()
+    if src.startswith(("http://", "https://", "rtsp://", "rtsps://")):
+        if no_frame:
+            return f"相機沒有畫面：{src}。請確認 IP Webcam 已按 Start、IP 正確、與電腦同一網路。"
+        return f"無法連接手機畫面：{src}。請確認手機已開始串流。"
+    if src.isdigit():
+        if no_frame:
+            return f"鏡頭 index {src} 沒有畫面。請檢查是否被占用，或 Windows 相機隱私權。"
+        return f"無法開啟鏡頭 index {src}。可執行 start-webcam.bat --list 查看可用鏡頭。"
+    if no_frame:
+        return f"影像來源沒有畫面：{src}。"
+    return f"無法開啟影像來源 {src}" + (f"：{extra}" if extra else "。")
+
+
+def placeholder_frame(width: int = 1280, height: int = 720) -> "np.ndarray":
+    return np.full((height, width, 3), 22, dtype=np.uint8)
+
+
 def wait_for_frame(stream: StreamReader, timeout_sec: float = 20.0):
     """Block until the stream delivers a real frame (important for phone IP Webcam)."""
-    import time
+    if not stream.is_ready():
+        return None
 
     deadline = time.monotonic() + timeout_sec
     last_log = 0.0
@@ -231,49 +270,57 @@ def main(argv: list[str] | None = None) -> int:
 
     manager = RecipeManager.from_path(recipe_path)
     renderer = OverlayRenderer()
+    locker = DetectionLock()
     image_demo = is_image_source(parse_source(source))
-
-    detector = None
-    if image_demo:
-        print("[image-demo] Still image mode — cucumber bbox on image (no YOLO).")
-    else:
-        print(f"Loading YOLO model: {args.model} …")
-        detector = Detector(model_name=args.model, conf=args.conf, device=args.device)
 
     print(f"Recipe: {manager.name}")
     print(f"Source: {source}")
     print("Class map:", config.POC_CLASS_MAP)
     print("Detectable now:", summarize_detectable())
-    if not image_demo:
+
+    stream = StreamReader(
+        source, loop_file=not args.no_loop, low_latency=True, strict=False
+    )
+
+    camera_error = None
+    if stream.last_error:
+        camera_error = describe_stream_error(source, stream.last_error)
+        print(camera_error, file=sys.stderr)
+
+    cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
+    first_frame = wait_for_frame(stream, timeout_sec=25.0) if stream.is_ready() else None
+    live_ok = first_frame is not None
+    if not live_ok:
+        if not camera_error:
+            camera_error = describe_stream_error(source, stream.last_error, no_frame=True)
+            print(camera_error, file=sys.stderr)
+        first_frame = placeholder_frame()
+    else:
+        camera_error = None
+        print("[stream] camera frame OK")
+
+    detector = None
+    if image_demo:
+        print("[image-demo] Still image mode — cucumber bbox on image (no YOLO).")
+    else:
+        boot = renderer.render(
+            first_frame,
+            [],
+            instruction="載入辨識模型中…" if not camera_error else manager.message,
+            step_label=manager.name,
+            error_message=camera_error or "",
+        )
+        cv2.imshow(config.WINDOW_NAME, boot)
+        cv2.waitKey(1)
+        print(f"Loading YOLO model: {args.model} …")
+        detector = Detector(model_name=args.model, conf=args.conf, device=args.device)
         print(f"Latency: detect_every={args.detect_every}, infer_width={args.infer_width}")
 
-    try:
-        stream = StreamReader(source, loop_file=not args.no_loop, low_latency=True)
-    except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
-        print(
-            "Hint: try --image path\\to\\cucumber.jpg, or --webcam 1, or --list-cameras.",
-            file=sys.stderr,
-        )
-        return 1
-
-    # Open main window early and wait until camera frames actually arrive.
-    cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
-    first_frame = wait_for_frame(stream, timeout_sec=25.0)
-    if first_frame is None:
-        print(
-            "[stream] No camera frame received. Check phone IP Webcam / USB cam.",
-            file=sys.stderr,
-        )
-        stream.release()
-        cv2.destroyAllWindows()
-        return 1
     cv2.imshow(config.WINDOW_NAME, first_frame)
     cv2.waitKey(1)
-    print("[stream] camera frame OK")
 
     plane_scale = PlaneScale.load()
-    if args.calibrate or plane_scale is None:
+    if live_ok and (args.calibrate or plane_scale is None):
         if plane_scale is None:
             print("[scale] No saved calibration — please mark the cutting board.")
         else:
@@ -283,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
             plane_scale = calibrated
         elif plane_scale is None:
             print(
-                "[scale] Skipped. Cut lines will use equal-split fallback until you press C.",
+                "[scale] Skipped. Cut lines will use equal-split fallback until you click 校正尺度.",
                 file=sys.stderr,
             )
         # Recreate clean main window (removes calibration trackbars).
@@ -292,17 +339,36 @@ def main(argv: list[str] | None = None) -> int:
         except cv2.error:
             pass
         cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
-    else:
+    elif plane_scale is not None:
         print(
             f"[scale] Loaded {config.SCALE_CALIBRATION_PATH.name}: "
             f"{plane_scale.width_mm/10:.0f}x{plane_scale.height_mm/10:.0f} cm, "
-            f"{plane_scale.mm_per_px:.4f} mm/px  (press C to redo)"
+            f"{plane_scale.mm_per_px:.4f} mm/px  (click 校正尺度 to redo)"
         )
+    else:
+        print("[scale] Camera unavailable — calibration skipped until the stream is connected.")
 
     last_log = 0.0
+    last_retry = 0.0
+    last_good = first_frame if live_ok else None
     frame_i = 0
     detections = []
     detect_every = max(1, args.detect_every)
+    pending_actions: List[str] = []
+
+    def on_mouse(event, x, y, _flags, _param) -> None:
+        # HighGUI already reports image-pixel coords (even if the window is resized).
+        if event == cv2.EVENT_MOUSEMOVE:
+            renderer.set_hover(x, y)
+        elif event == cv2.EVENT_LBUTTONDOWN:
+            action = renderer.hit_action(x, y)
+            if action:
+                pending_actions.append(action)
+
+    def bind_toolbar_mouse() -> None:
+        cv2.setMouseCallback(config.WINDOW_NAME, on_mouse)
+
+    bind_toolbar_mouse()
 
     try:
         while True:
@@ -310,13 +376,35 @@ def main(argv: list[str] | None = None) -> int:
                 break
 
             ok, frame = stream.read()
-            if not ok or frame is None:
+            live_frame = bool(ok and frame is not None)
+            if live_frame:
+                if camera_error:
+                    print("[stream] camera frame OK")
+                camera_error = None
+                last_good = frame
+            else:
                 if stream._is_file and args.no_loop:
                     break
-                key = cv2.waitKey(30) & 0xFF
-                if key in (27, ord("q")) or window_closed(config.WINDOW_NAME):
-                    break
-                continue
+                if stream.is_ready() and last_good is not None:
+                    key = cv2.waitKey(1) & 0xFF
+                    mapped = key_to_action(key)
+                    if mapped:
+                        pending_actions.append(mapped)
+                    if mapped == "quit" or window_closed(config.WINDOW_NAME):
+                        break
+                    continue
+                now = time.monotonic()
+                if now - last_retry >= 2.0:
+                    last_retry = now
+                    if not stream.is_ready():
+                        stream.open()
+                    if stream.last_error:
+                        camera_error = describe_stream_error(source, stream.last_error)
+                    else:
+                        camera_error = describe_stream_error(
+                            source, stream.last_error, no_frame=True
+                        )
+                frame = last_good if last_good is not None else placeholder_frame()
 
             h, w = frame.shape[:2]
             step = manager.current_step()
@@ -325,9 +413,8 @@ def main(argv: list[str] | None = None) -> int:
             frame_i += 1
             if image_demo:
                 detections = [synthetic_cucumber(frame)]
-            elif frame_i % detect_every == 0:
+            elif live_frame and frame_i % detect_every == 0:
                 detections = []
-                produce = detect_cucumber(frame)
                 yolo_dets: list = []
                 if detector is not None:
                     infer = frame
@@ -346,10 +433,17 @@ def main(argv: list[str] | None = None) -> int:
                             d.y1 *= inv
                             d.x2 *= inv
                             d.y2 *= inv
-                # Prefer cucumber contour over YOLO knife/fork false positives.
-                detections = merge_produce_and_yolo(frame, produce, yolo_dets)
+                detections = merge_produce_and_yolo(frame, [], yolo_dets)
+            elif not live_frame:
+                detections = []
 
-            manager.update(detections, w, h)
+            detections = locker.update(
+                frame,
+                detections,
+                detections_fresh=live_frame and (image_demo or (frame_i % detect_every == 0)),
+            )
+            if live_frame:
+                manager.update(detections, w, h)
 
             step = manager.current_step()
             draw_cuts = bool(step and step.get("guide_lines"))
@@ -364,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
             if draw_cuts and cut_spacing_mm and mm_per_px:
                 scale_hint = f"cut {cut_spacing_mm:.0f}mm  ({mm_per_px:.3f} mm/px)"
             elif draw_cuts and not mm_per_px:
-                scale_hint = "need scale: press C"
+                scale_hint = "請點「校正尺度」"
             elif plane_scale:
                 scale_hint = f"scale {plane_scale.mm_per_px:.3f} mm/px"
             else:
@@ -393,6 +487,7 @@ def main(argv: list[str] | None = None) -> int:
                 hold_progress=hold if hold > 0 else None,
                 scale_hint=scale_hint,
                 ingredients=manager.ingredient_checklist(),
+                error_message=camera_error or "",
             )
 
             cv2.imshow(config.WINDOW_NAME, overlay)
@@ -402,26 +497,47 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[{step_label}] dets={names or '-'} hold={manager.hold_progress:.2f}")
                 last_log = now
 
-            key = cv2.waitKey(1) & 0xFF
-            if key in (27, ord("q")) or window_closed(config.WINDOW_NAME):
+            key = cv2.waitKey(1 if live_frame else 30) & 0xFF
+            actions = list(pending_actions)
+            pending_actions.clear()
+            mapped = key_to_action(key)
+            if mapped:
+                actions.append(mapped)
+            if window_closed(config.WINDOW_NAME):
                 break
-            if key in (ord("r"), ord("R")):
-                manager.reset()
-                renderer.buffer.clear()
-                print("[demo] restarted")
-            if key in (ord("c"), ord("C")):
-                calibrated = run_scale_calibration(stream)
-                if calibrated is not None:
-                    plane_scale = calibrated
-                try:
-                    cv2.destroyWindow(config.WINDOW_NAME)
-                except cv2.error:
-                    pass
-                cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
-            if key in (ord("n"), ord("N"), 32):  # Space
-                manager.confirm()
-                if manager.is_finished():
-                    print("Recipe finished.")
+
+            stop = False
+            for action in actions:
+                if action == "quit":
+                    stop = True
+                    break
+                if action == "restart":
+                    manager.reset()
+                    renderer.clear()
+                    locker.clear()
+                    print("[demo] restarted")
+                elif action == "calibrate":
+                    if camera_error or not stream.is_ready():
+                        camera_error = camera_error or describe_stream_error(
+                            source, stream.last_error, no_frame=True
+                        )
+                        print(camera_error, file=sys.stderr)
+                        continue
+                    calibrated = run_scale_calibration(stream)
+                    if calibrated is not None:
+                        plane_scale = calibrated
+                    try:
+                        cv2.destroyWindow(config.WINDOW_NAME)
+                    except cv2.error:
+                        pass
+                    cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
+                    bind_toolbar_mouse()
+                elif action == "next":
+                    manager.confirm()
+                    if manager.is_finished():
+                        print("Recipe finished.")
+            if stop:
+                break
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:

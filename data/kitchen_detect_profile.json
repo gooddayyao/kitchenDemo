@@ -1,8 +1,10 @@
 {
   "description": "KITCHEN CV detect/trigger profile. Edit this file to adjust mappings and thresholds.",
-  "yolo_model": "yolov8n.pt",
+  "yolo_model": "training/weights/yolov8n-kitchen.pt",
   "yolo_conf": 0.35,
   "yolo_iou": 0.45,
+  "lock_conf": 0.7,
+  "lock_lost_sec": 0.8,
   "confirm_object_class": "mouse",
   "poc_class_map": {
     "cucumber": "cucumber",
@@ -42,9 +44,7 @@
     "label": "暫存確認區"
   },
   "overlay": {
-    "occlusion_buffer_sec": 1.5,
-    "assumed_fps": 30,
     "cut_line_count": 3
   },
-  "default_recipe": "cucumber_cv.json"
+  "default_recipe": "cucumber.json"
 }

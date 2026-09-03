@@ -1,7 +1,7 @@
 {
-  "description": "常見廚房食材／器具辨識目錄。detect=yolo 需 COCO 類別；detect=color_green 用色彩輪廓；detect=none 僅供食譜標示，目前模型認不到。",
+  "description": "常見廚房食材／器具辨識目錄。detect=yolo 表示目前可由 YOLO 辨識；detect=none 僅供食譜標示，目前模型認不到。",
   "items": [
-    {"id": "cucumber", "label": "小黃瓜", "detect": "color_green", "category": "vegetable"},
+    {"id": "cucumber", "label": "小黃瓜", "detect": "yolo", "yolo": "cucumber", "category": "vegetable"},
     {"id": "banana", "label": "香蕉", "detect": "yolo", "yolo": "banana", "category": "fruit"},
     {"id": "apple", "label": "蘋果", "detect": "yolo", "yolo": "apple", "category": "fruit"},
     {"id": "orange", "label": "橘子", "detect": "yolo", "yolo": "orange", "category": "fruit"},

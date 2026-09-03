@@ -23,7 +23,7 @@ VALID_COMPLETION = {"timer", "manual_confirm", "marker_detect", "vision_heuristi
 def list_recipe_ids() -> list[str]:
     if not RECIPES_DIR.exists():
         return []
-    return sorted(p.stem for p in RECIPES_DIR.glob("*.json"))
+    return sorted(p.stem for p in RECIPES_DIR.glob("*.json") if not p.stem.endswith("_cv"))
 
 
 def load_recipe(recipe_id: str) -> dict[str, Any]:

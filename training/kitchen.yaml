@@ -1,0 +1,22 @@
+# Ultralytics YOLOv8 dataset config
+# path 由 train.py 在執行時改寫成英文路徑（Ultralytics 會吃掉中文資料夾名）
+#
+# 標註開始後不要改 names 順序。要加類別請接在最後，並同步 classes.txt。
+
+path: dataset
+train: images/train
+val: images/val
+
+names:
+  0: cucumber
+  1: tomato
+  2: onion
+  3: garlic
+  4: carrot
+  5: potato
+  6: egg
+  7: chicken
+  8: beef
+  9: bowl
+  10: knife
+  11: pepper

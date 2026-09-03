@@ -33,7 +33,7 @@ echo ========================================
 echo  KITCHEN AR — 本機 / USB Webcam
 echo  Camera index: %CAM_INDEX%
 echo  首次請點砧板四角並用拉桿輸入長寬(cm)
-echo  按鍵：C 校正尺度 / N Space 下一步 / Q 離開
+echo  畫面上方按鈕：重新開始 / 校正尺度 / 下一步 / 離開
 echo ========================================
 echo.
 

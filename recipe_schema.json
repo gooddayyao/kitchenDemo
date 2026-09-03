@@ -14,7 +14,8 @@
         "properties": {
           "name": { "type": "string" },
           "quantity": { "type": "string" },
-          "prep": { "type": ["string", "null"], "description": "e.g. 切丁, 切片, 拍扁" }
+          "prep": { "type": ["string", "null"], "description": "e.g. 切丁, 切片, 拍扁" },
+          "id": { "type": "string", "description": "可選；對應 ingredient_catalog / YOLO 邏輯 id，例如 cucumber" }
         }
       }
     },
@@ -73,6 +74,26 @@
                 "completion": { "type": "string" }
               }
             }
+          },
+          "target_ingredient": {
+            "type": ["string", "null"],
+            "description": "CV：邏輯食材 id。vision_heuristic + 此欄 → 鏡頭辨識到即過關"
+          },
+          "trigger_condition": {
+            "type": "string",
+            "description": "CV：若有則覆寫 completion 對應的觸發（target_present / manual_confirm / …）"
+          },
+          "cut_spacing_mm": {
+            "type": "number",
+            "description": "CV：切線間距（毫米），guidance_type=cut_lines 時使用"
+          },
+          "checklist_label": {
+            "type": "string",
+            "description": "CV：食材列底下的子步驟短標"
+          },
+          "confirm_on_complete": {
+            "type": "boolean",
+            "description": "CV：步驟完成時打勾食材（target_present 完成時也會打勾）"
           }
         }
       }

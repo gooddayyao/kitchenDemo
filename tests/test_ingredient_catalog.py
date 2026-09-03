@@ -20,11 +20,17 @@ class IngredientCatalogTests(unittest.TestCase):
         self.assertEqual(label_for("banana"), "香蕉")
         self.assertEqual(label_for("hot dog"), "熱狗")
 
+    def test_id_for_label(self) -> None:
+        from src.ingredient_catalog import id_for_label
+
+        self.assertEqual(id_for_label("小黃瓜"), "cucumber")
+        self.assertEqual(id_for_label("cucumber"), "cucumber")
+
     def test_yolo_names(self) -> None:
         names = yolo_class_names()
         self.assertIn("banana", names)
         self.assertIn("hot dog", names)
-        self.assertNotIn("cucumber", names)  # color heuristic, not COCO
+        self.assertIn("cucumber", names)
 
 
 if __name__ == "__main__":

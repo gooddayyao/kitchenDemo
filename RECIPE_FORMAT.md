@@ -23,7 +23,7 @@
 
 ## 2. Web Demo 格式（CookingRecipe）
 
-用於：`data/recipes/*.json`（如 steak / pasta）、`recipe-generator` 輸出、`/api/recipes`。
+用於：`data/recipes/*.json`（如 steak / pasta / cucumber）、`recipe-generator` 輸出、`/api/recipes`。鏡頭 Demo 預設也讀這份格式。
 
 ### 必要頂層欄位
 
@@ -31,7 +31,7 @@
 |------|------|------|
 | `id` | string | 食譜 id |
 | `title` | string | 顯示名稱 |
-| `ingredients` | array | 材料列表 |
+| `ingredients` | array | 材料列表（建議加 `id`，對應 `ingredient_catalog`） |
 | `zones` | object | 砧板／爐灶／備料正規化座標（0–1） |
 | `steps` | array | 步驟 |
 
@@ -57,6 +57,16 @@
 | `completion` | `timer` \| `manual_confirm` \| `marker_detect` \| `vision_heuristic` | 完成規則 |
 | `guide_lines` | object \| null | 切線模板（`cut_lines` 時使用） |
 | `substeps` | array（可選） | 子步驟，MVP 以顯示為主 |
+
+鏡頭 Demo 可選欄位（寫在同一份步驟上即可，Web 可忽略）：
+
+| 欄位 | 用途 |
+|------|------|
+| `target_ingredient` | 這步要認的食材 id（如 `cucumber`） |
+| `trigger_condition` | 覆寫 `completion` 對應的 CV 觸發 |
+| `cut_spacing_mm` | 切線間距（mm） |
+| `checklist_label` | 食材列底下的子步驟短標 |
+| `confirm_on_complete` | 此步完成時打勾食材 |
 
 ### 簡例
 
@@ -89,7 +99,7 @@
 
 ## 3. KITCHEN CV 格式（CV 主線優先）
 
-用於：相機 AR 預覽（`src/phone_test.py`），實例如 [`data/recipes/cucumber_cv.json`](data/recipes/cucumber_cv.json)。
+用於：相機 AR 預覽的**執行時**格式。新食譜請用上一節 CookingRecipe 紀錄；`RecipeManager.from_path` 會自動轉成此格式。舊檔 [`data/recipes/cucumber_cv.json`](data/recipes/cucumber_cv.json) 仍可直接載入。
 
 ### 必要頂層欄位
 
@@ -118,11 +128,13 @@
 | `trigger_condition` | 見下表 | 自動／手動完成條件 |
 | `timer_seconds` | number（可選） | 僅 `timer` 觸發時使用 |
 | `guide_lines` | boolean | 是否在目標 bbox 畫切線 |
+| `checklist_label` | string（可選） | 食材列底下的子步驟短標；`target_present` 完成後才顯示 |
 
 ### `trigger_condition`
 
 | 值 | 行為 | 實作 |
 |----|------|------|
+| `target_present` | 畫面出現目標且持續約 0.8 秒 | YOLO（門檻見 detect profile） |
 | `target_count_increase` | 目標數量 1 → **>3** 且持續約 2 秒 | YOLO 計數（門檻見 detect profile） |
 | `enter_dropzone` | 目標 bbox ∩ dropzone，停留 ≥2 秒 | YOLO |
 | `timer` | 倒數結束 | 計時器 |
@@ -166,21 +178,42 @@ PoC 階段 `target_ingredient` → YOLO 類別映射寫在 [`data/kitchen_detect
 
 ---
 
-## 4. Web ↔ KITCHEN 橋接
+## 4. 建議怎麼紀錄食譜（單一檔）
 
-CV 透過 `src/recipe_manager.py` 的 adapter 轉換 Web 食譜；**不修改**既有 `recipe_schema.json`。
+**請用 CookingRecipe JSON 紀錄／匯入**（`recipe-generator` 輸出、`steak.json`、新的 [`data/recipes/cucumber.json`](data/recipes/cucumber.json)）。  
+鏡頭 Demo 讀檔時若看到 `steps[].step`，會自動轉成 CV 執行格式；不必再手寫一份 `*_cv.json`。
+
+鏡頭需要的欄位寫在**同一份**步驟上（皆可選）：
+
+| 欄位 | 用途 |
+|------|------|
+| `ingredients[].id` | 對應目錄／YOLO（沒有則用中文 `name` 對目錄） |
+| `target_ingredient` | 這步要認的食材 id |
+| `completion: vision_heuristic` + `target_ingredient` | 辨識到就過關（`target_present`） |
+| `guidance_type: cut_lines` | 顯示切線 |
+| `cut_spacing_mm` | 切線間距（mm） |
+| `checklist_label` 或 `title` | 食材列底下的子步驟 |
+
+舊的 [`cucumber_cv.json`](data/recipes/cucumber_cv.json)（`step_id`）仍可直接載入。
+
+---
+
+## 5. Web ↔ KITCHEN 橋接
+
+CV 透過 `src/recipe_manager.py` 的 adapter 轉換；可選鏡頭欄位寫在同一份 CookingRecipe（見 `recipe_schema.json`）。
 
 | Web (CookingRecipe) | KITCHEN CV |
 |---------------------|------------|
 | `completion: timer` | `trigger_condition: timer` |
 | `completion: manual_confirm` | `trigger_condition: manual_confirm` |
-| `completion: vision_heuristic` / `marker_detect` | 目前多映射為 `manual_confirm`（語意判斷可選 Gemini） |
+| `completion: vision_heuristic` + `target_ingredient` | `trigger_condition: target_present` |
+| `completion: marker_detect` | `trigger_condition: enter_dropzone` |
 | `guidance_type: cut_lines` / `guide_lines` | `guide_lines: true` |
-| `zones.prep`（或其他區） | 可填入 `dropzone` |
+| `zones.prep`（否則 `cutting_board`） | 可填入 `dropzone` |
 
 ---
 
-## 5. 修改格式時請同步
+## 6. 修改格式時請同步
 
 1. 改本檔的欄位／枚舉說明  
 2. 更新對應 JSON Schema（`recipe_schema.json` 或 `data/kitchen_recipe_schema.json`）  

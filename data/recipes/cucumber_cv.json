@@ -19,9 +19,10 @@
       "target_ingredient": "cucumber",
       "expected_status": "sliced",
       "trigger_condition": "manual_confirm",
-      "guide_lines": false,
+      "guide_lines": true,
       "cut_spacing_mm": 10,
-      "confirm_on_complete": true
+      "confirm_on_complete": true,
+      "checklist_label": "切成 1cm 薄片"
     }
   ]
 }

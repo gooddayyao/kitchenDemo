@@ -1,0 +1,12 @@
+cucumber
+tomato
+onion
+garlic
+carrot
+potato
+egg
+chicken
+beef
+bowl
+knife
+pepper
