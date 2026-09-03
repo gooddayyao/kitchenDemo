@@ -24,6 +24,7 @@ Keys / on-screen buttons (top row):
   校正尺度 (C)     — calibrate cutting-board scale
   下一步 (N/Space) — manual confirm / next step
   離開 (Q/ESC)     — quit
+  G              — Gemini re-identify (when --gemini-track)
 """
 
 from __future__ import annotations
@@ -45,11 +46,14 @@ from src import config
 from src.detection_lock import DetectionLock
 from src.detection_merge import merge_produce_and_yolo
 from src.detector import Detector
+from src.gemini_seed import seed_from_frame
 from src.ingredient_catalog import label_for, summarize_detectable, yolo_class_names
+from src.object_tracker import MultiObjectTracker
 from src.overlay_renderer import OverlayRenderer
 from src.recipe_manager import Detection, RecipeManager
 from src.scale_calibrator import PlaneScale, ScaleCalibrator
 from src.stream_reader import StreamReader, is_image_source, parse_source
+from services.gemini_client import get_api_key
 
 
 def key_to_action(key: int) -> Optional[str]:
@@ -162,6 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Use a still image of cucumber (jpg/png). Skips YOLO; treats image as cucumber.",
     )
+    p.add_argument(
+        "--gemini-track",
+        action="store_true",
+        help="Keyframe Gemini identify + local CSRT tracking (skips YOLO). Needs GEMINI_API_KEY.",
+    )
     return p
 
 
@@ -248,6 +257,45 @@ def run_scale_calibration(stream: StreamReader) -> Optional[PlaneScale]:
     return calibrator.run(lambda: _read_frame(stream))
 
 
+def gemini_reseed(
+    frame,
+    tracker: MultiObjectTracker,
+    manager: RecipeManager,
+    *,
+    reason: str,
+) -> str:
+    """Ask Gemini on this keyframe and (re)init CSRT trackers. Returns status text."""
+    step = manager.current_step()
+    focus = []
+    if step and step.get("target_ingredient"):
+        focus.append(str(step["target_ingredient"]))
+    for ing in manager.required_ingredients():
+        iid = str(ing.get("id") or "")
+        if iid and iid not in focus:
+            focus.append(iid)
+
+    hint = step.get("instruction") if step else None
+    tracker.status = "seeding"
+    print(f"[gemini] seeding ({reason}) …")
+    try:
+        seeds = seed_from_frame(frame, focus_ids=focus or None, hint=hint)
+    except Exception as exc:
+        tracker.last_seed_error = str(exc)
+        tracker.status = "lost"
+        msg = f"Gemini 失敗：{exc}"
+        print(f"[gemini] {msg}")
+        return msg
+
+    h, w = frame.shape[:2]
+    dets = [s.to_detection(w, h) for s in seeds]
+    n = tracker.seed_from_detections(frame, dets)
+    names = ", ".join(f"{s.ingredient_id}/{s.label}" for s in seeds) or "(none)"
+    msg = f"Gemini 鎖定 {n} 個：{names}"
+    print(f"[gemini] {msg}")
+    tracker.last_seed_error = ""
+    return msg
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -272,6 +320,19 @@ def main(argv: list[str] | None = None) -> int:
     renderer = OverlayRenderer()
     locker = DetectionLock()
     image_demo = is_image_source(parse_source(source))
+    gemini_track = bool(args.gemini_track)
+
+    tracker: Optional[MultiObjectTracker] = None
+    if gemini_track:
+        if not get_api_key():
+            print(
+                "[gemini-track] GEMINI_API_KEY is not set. "
+                "Set it then re-run with --gemini-track.",
+                file=sys.stderr,
+            )
+            return 1
+        print("[gemini-track] Mode ON — Gemini keyframe seed + CSRT (YOLO skipped).")
+        tracker = MultiObjectTracker(max_lose_frames=config.GEMINI_TRACK_MAX_LOSE_FRAMES)
 
     print(f"Recipe: {manager.name}")
     print(f"Source: {source}")
@@ -300,7 +361,9 @@ def main(argv: list[str] | None = None) -> int:
         print("[stream] camera frame OK")
 
     detector = None
-    if image_demo:
+    if gemini_track:
+        pass  # YOLO skipped in gemini-track mode
+    elif image_demo:
         print("[image-demo] Still image mode — cucumber bbox on image (no YOLO).")
     else:
         boot = renderer.render(
@@ -314,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         cv2.waitKey(1)
         print(f"Loading YOLO model: {args.model} …")
         detector = Detector(model_name=args.model, conf=args.conf, device=args.device)
+    if not image_demo and not gemini_track:
         print(f"Latency: detect_every={args.detect_every}, infer_width={args.infer_width}")
 
     cv2.imshow(config.WINDOW_NAME, first_frame)
@@ -370,6 +434,29 @@ def main(argv: list[str] | None = None) -> int:
 
     bind_toolbar_mouse()
 
+    last_step_id = None
+    gemini_status = ""
+    force_reseed = False
+
+    if gemini_track and tracker is not None and first_frame is not None:
+        # Banner while blocking on API
+        banner = first_frame.copy()
+        cv2.putText(
+            banner,
+            "Gemini identifying ingredients...",
+            (24, 48),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.9,
+            (0, 220, 255),
+            2,
+        )
+        cv2.imshow(config.WINDOW_NAME, banner)
+        cv2.waitKey(1)
+        gemini_status = gemini_reseed(first_frame, tracker, manager, reason="startup")
+        last_step_id = (
+            int(manager.current_step()["step_id"]) if manager.current_step() else None
+        )
+
     try:
         while True:
             if window_closed(config.WINDOW_NAME):
@@ -409,9 +496,42 @@ def main(argv: list[str] | None = None) -> int:
             h, w = frame.shape[:2]
             step = manager.current_step()
             yolo_target = manager.resolve_yolo_class(step.get("target_ingredient") if step else None)
+            step_id = int(step["step_id"]) if step else None
 
             frame_i += 1
-            if image_demo:
+            if gemini_track and tracker is not None:
+                need_reseed = force_reseed
+                force_reseed = False
+                if last_step_id is not None and step_id != last_step_id:
+                    need_reseed = True
+                    print(f"[gemini] step changed {last_step_id} → {step_id}")
+                last_step_id = step_id
+
+                target_name = step.get("target_ingredient") if step else None
+                if tracker.target_lost(str(target_name) if target_name else None):
+                    cooled = (time.monotonic() - tracker.last_seed_at) >= config.GEMINI_RESEED_COOLDOWN_SEC
+                    if cooled or tracker.last_seed_at == 0:
+                        need_reseed = True
+
+                if need_reseed:
+                    tip = frame.copy()
+                    cv2.putText(
+                        tip,
+                        "Gemini re-identifying...",
+                        (24, 48),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.9,
+                        (0, 220, 255),
+                        2,
+                    )
+                    cv2.imshow(config.WINDOW_NAME, tip)
+                    cv2.waitKey(1)
+                    gemini_status = gemini_reseed(
+                        frame, tracker, manager, reason="reseed"
+                    )
+
+                detections = tracker.update(frame)
+            elif image_demo:
                 detections = [synthetic_cucumber(frame)]
             elif live_frame and frame_i % detect_every == 0:
                 detections = []
@@ -463,6 +583,12 @@ def main(argv: list[str] | None = None) -> int:
                 scale_hint = f"scale {plane_scale.mm_per_px:.3f} mm/px"
             else:
                 scale_hint = "no scale"
+            if gemini_track and tracker is not None:
+                scale_hint = (
+                    f"gemini:{tracker.status} n={tracker.alive_count}  |  {scale_hint}"
+                )
+                if gemini_status:
+                    scale_hint = f"{gemini_status[:40]}  |  {scale_hint}"
 
             step_label = (
                 f"{manager.name}  ·  step {manager.current_index + 1}/"
@@ -473,10 +599,13 @@ def main(argv: list[str] | None = None) -> int:
             hold = manager.hold_progress
             if manager.mouse_confirm_progress > hold:
                 hold = manager.mouse_confirm_progress
+            highlight = yolo_target
+            if gemini_track and step and step.get("target_ingredient"):
+                highlight = str(step["target_ingredient"])
             overlay = renderer.render(
                 frame,
                 detections,
-                highlight_class=yolo_target,
+                highlight_class=highlight,
                 draw_cut_lines=draw_cuts,
                 cut_spacing_mm=cut_spacing_mm,
                 mm_per_px=mm_per_px,
@@ -515,6 +644,9 @@ def main(argv: list[str] | None = None) -> int:
                     manager.reset()
                     renderer.clear()
                     locker.clear()
+                    if tracker is not None:
+                        tracker.clear()
+                        force_reseed = True
                     print("[demo] restarted")
                 elif action == "calibrate":
                     if camera_error or not stream.is_ready():
@@ -538,6 +670,8 @@ def main(argv: list[str] | None = None) -> int:
                         print("Recipe finished.")
             if stop:
                 break
+            if key in (ord("g"), ord("G")) and gemini_track:
+                force_reseed = True
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:

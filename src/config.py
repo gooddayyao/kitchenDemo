@@ -68,6 +68,12 @@ CUT_LINE_COUNT = int(_OVERLAY.get("cut_line_count", 3))
 _default_recipe_name = str(_PROFILE.get("default_recipe", "cucumber.json"))
 DEFAULT_CV_RECIPE = RECIPES_DIR / _default_recipe_name
 
+# Gemini keyframe → CSRT tracking
+_GEMINI_TRACK = dict(_PROFILE.get("gemini_track") or {})
+GEMINI_RESEED_COOLDOWN_SEC = float(_GEMINI_TRACK.get("reseed_cooldown_sec", 4.0))
+GEMINI_TRACK_MAX_LOSE_FRAMES = int(_GEMINI_TRACK.get("max_lose_frames", 20))
+GEMINI_JPEG_MAX_SIDE = int(_GEMINI_TRACK.get("jpeg_max_side", 960))
+
 # Display
 WINDOW_NAME = "KITCHEN AR Preview"
 

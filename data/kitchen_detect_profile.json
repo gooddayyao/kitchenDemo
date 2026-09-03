@@ -46,5 +46,11 @@
   "overlay": {
     "cut_line_count": 3
   },
-  "default_recipe": "cucumber.json"
+  "default_recipe": "cucumber.json",
+  "gemini_track": {
+    "enabled_by_default": false,
+    "reseed_cooldown_sec": 4.0,
+    "max_lose_frames": 20,
+    "jpeg_max_side": 960
+  }
 }

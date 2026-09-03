@@ -662,6 +662,20 @@ class OverlayRenderer:
             body_items.append((text, (12, body_y + 42), (240, 240, 240), 18))
         draw_texts_bgr(img, body_items)
 
+        help_y = h - 16
+        help_text = "[G] Gemini  [R] restart  [C] scale  [N/Space] next  [Q/ESC] quit"
+        if scale_hint:
+            help_text = f"{scale_hint}  |  {help_text}"
+        cv2.putText(
+            img,
+            help_text,
+            (12, help_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (180, 180, 180),
+            1,
+        )
+
         if timer_remaining > 0:
             mm = int(timer_remaining) // 60
             ss = int(timer_remaining) % 60

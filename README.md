@@ -41,13 +41,15 @@ Spatial projection + semi-automatic camera cooking assistant for a fixed kitchen
 
 ## Run CV preview (webcam / phone)
 ```powershell
-.\start-webcam.bat          # 本機 / USB 鏡頭
-.\start-webcam.bat 1
-.\start-phone.bat           # 手機 IP Webcam（會詢問 IP）
-.\start-phone.bat 192.168.x.x
+.\start-webcam.bat          # 本機 / USB 鏡頭（YOLO + 色彩小黃瓜）
+.\start-phone.bat           # 手機 IP Webcam
+.\start-gemini-track.bat    # Gemini 認物 + CSRT 追蹤（需 GEMINI_API_KEY）
 ```
-macOS / Linux：`./start-webcam.sh`、`./start-phone.sh`  
-或：`python -m src.phone_test --webcam`
+```powershell
+$env:GEMINI_API_KEY = "your-key"
+python -m src.phone_test --webcam --gemini-track
+```
+按 `G` 可強制再問一次 Gemini；換步驟或追丟也會自動重認。
 
 ## Usage
 1. Select a recipe (e.g. 香煎牛排) from the left panel.
