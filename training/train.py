@@ -231,15 +231,19 @@ def main() -> int:
     if not best.exists():
         best = work / "runs" / "kitchen" / "weights" / "best.pt"
     if best.exists():
-        dest_dir = ROOT / "weights"
-        dest_dir.mkdir(exist_ok=True)
-        dest = dest_dir / "yolov8n-kitchen.pt"
-        shutil.copy2(best, dest)
+        name = "yolov8n-kitchen.pt"
+        training_dest = ROOT / "weights" / name
+        release_dest = ROOT.parent / "release" / name
+        training_dest.parent.mkdir(exist_ok=True)
+        release_dest.parent.mkdir(exist_ok=True)
+        shutil.copy2(best, training_dest)
+        shutil.copy2(best, release_dest)
         print(
             f"\n[完成] 最佳權重：{best}\n"
-            f"       已複製到：{dest}\n\n"
-            "接回 CV 預覽：把權重路徑寫進 data/kitchen_detect_profile.json 的 yolo_model，例如：\n"
-            '  "yolo_model": "training/weights/yolov8n-kitchen.pt"\n'
+            f"       訓練副本：{training_dest}\n"
+            f"       發行副本：{release_dest}\n\n"
+            "接回 CV 預覽：data/kitchen_detect_profile.json 的 yolo_model 應為：\n"
+            '  "yolo_model": "release/yolov8n-kitchen.pt"\n'
             "並把 data/ingredient_catalog.json 裡已訓練類別的 detect 改成 yolo（yolo 欄位與 names 一致）。"
         )
     else:

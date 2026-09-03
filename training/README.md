@@ -122,7 +122,7 @@ python training\train.py --no-split   # val 已自己分好時
 
 - 有 NVIDIA GPU 會自動用 CUDA；沒有則走 CPU（會慢很多）。
 - `val/` 為空且 train ≥ 5 張時，腳本會固定 seed 抽 20% 到 val。
-- 輸出：`training/runs/detect/kitchen/weights/best.pt`，並複製為 `training/weights/yolov8n-kitchen.pt`。
+- 輸出：`best.pt`，並複製到 `training/weights/yolov8n-kitchen.pt` 與 `release/yolov8n-kitchen.pt`。
 
 也可直接用 Ultralytics CLI：
 
@@ -135,7 +135,7 @@ yolo detect train data=training/kitchen.yaml model=yolov8n.pt epochs=100 imgsz=6
 1. 編輯 `data/kitchen_detect_profile.json`：
 
 ```json
-"yolo_model": "training/weights/yolov8n-kitchen.pt"
+"yolo_model": "release/yolov8n-kitchen.pt"
 ```
 
 2. 把 `data/ingredient_catalog.json` 裡已訓練的項目改成 YOLO，例如：
@@ -151,4 +151,5 @@ yolo detect train data=training/kitchen.yaml model=yolov8n.pt epochs=100 imgsz=6
 
 ## Git
 
-照片、標註、`.pt`、`runs/` 已在 `training/.gitignore`（根目錄也忽略 `*.pt`）。只提交 yaml、腳本與 README，不要把資料集推進 GitHub。
+照片、標註、訓練過程 `.pt`、`runs/` 已在 `training/.gitignore`（根目錄忽略一般 `*.pt`）。  
+發行權重 `release/*.pt` 例外會進 Git。只提交 yaml、腳本與 README，不要把資料集推進 GitHub。
