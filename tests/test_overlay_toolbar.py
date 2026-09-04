@@ -54,7 +54,8 @@ class OverlayOutlineTests(unittest.TestCase):
         pts = renderer._extract_outline(frame, det)
         self.assertIsNotNone(pts)
         assert pts is not None
-        self.assertEqual(len(pts), 48)
+        self.assertGreaterEqual(len(pts), 80)
+        self.assertLessEqual(len(pts), 256)
         self.assertAlmostEqual(float(pts[:, 0].mean()), 160.0, delta=22)
         self.assertAlmostEqual(float(pts[:, 1].mean()), 120.0, delta=18)
 
@@ -78,9 +79,9 @@ class OverlayOutlineTests(unittest.TestCase):
         renderer.show_camera = False
         out = renderer.render(frame, [det], draw_cut_lines=False)
         self.assertEqual(out.shape, frame.shape)
-        # Live green fill should be gone; blank board instead.
-        self.assertLess(int(out[120, 160, 1]), 90)
-        # Outline still drawn with boosted green channel somewhere in the bbox.
+        # Live cucumber green (~180) should be gone; blank board + soft wash only.
+        self.assertLess(int(out[120, 160, 1]), 120)
+        # Soft glow / rim still boosts green somewhere in the bbox.
         roi = out[78:162, 55:265]
         self.assertGreater(int(roi[:, :, 1].max()), 150)
         with_cuts = renderer.render(frame, [det], draw_cut_lines=True)

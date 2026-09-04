@@ -42,7 +42,14 @@ class Detector:
         self,
         frame: np.ndarray,
         class_filter: Optional[Sequence[str]] = None,
+        output_size: Optional[tuple] = None,
     ) -> List[Detection]:
+        """Run YOLO on ``frame``.
+
+        ``output_size`` is ``(width, height)`` of the display/camera frame. When the
+        inference frame is smaller (resized for speed), masks are upsampled to this
+        size before contour extraction so outlines hug the object on the full frame.
+        """
         kwargs = {
             "conf": self.conf,
             "iou": self.iou,
@@ -55,6 +62,10 @@ class Detector:
         allow: Optional[Set[str]] = set(class_filter) if class_filter else None
         out: List[Detection] = []
         h, w = frame.shape[:2]
+        out_w, out_h = (int(output_size[0]), int(output_size[1])) if output_size else (w, h)
+        sx = float(out_w) / float(w) if w else 1.0
+        sy = float(out_h) / float(h) if h else 1.0
+        scale_boxes = abs(sx - 1.0) > 1e-6 or abs(sy - 1.0) > 1e-6
 
         for result in results:
             boxes = result.boxes
@@ -71,13 +82,20 @@ class Detector:
                     continue
                 conf = float(box.conf.item())
                 x1, y1, x2, y2 = [float(v) for v in box.xyxy[0].tolist()]
+                if scale_boxes:
+                    x1, x2 = x1 * sx, x2 * sx
+                    y1, y2 = y1 * sy, y2 * sy
                 mask = None
                 if masks_data is not None and i < len(masks_data):
-                    mask = _mask_array(masks_data[i], h, w)
+                    mask = _mask_array(masks_data[i], out_h, out_w)
                 pending.append((name, conf, x1, y1, x2, y2, mask))
 
             idx = [i for i, p in enumerate(pending) if p[6] is not None]
-            vis_list = visible_masks([pending[i][6] for i in idx], frame) if idx else []
+            # visible_masks needs an image matching mask size; rebuild a proxy from infer if needed.
+            ref = frame
+            if scale_boxes and idx:
+                ref = cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
+            vis_list = visible_masks([pending[i][6] for i in idx], ref) if idx else []
             vis_by_i = {idx[k]: vis_list[k] for k in range(len(idx))}
             for i, (name, conf, x1, y1, x2, y2, _) in enumerate(pending):
                 contour = None
@@ -95,19 +113,28 @@ class Detector:
         return out
 
 
-def _mask_array(mask_obj: object, frame_h: int, frame_w: int) -> Optional[np.ndarray]:
+def _mask_array(mask_obj: object, out_h: int, out_w: int) -> Optional[np.ndarray]:
     mask = mask_obj.data.cpu().numpy().squeeze()
     if mask.ndim != 2:
         return None
-    resized = cv2.resize(mask, (frame_w, frame_h), interpolation=cv2.INTER_LINEAR)
-    return (resized > 0.5).astype(np.uint8)
+    # Upsample low-res proto-mask straight to the display frame for tighter contours.
+    resized = cv2.resize(mask, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
+    binary = (resized > 0.45).astype(np.uint8)
+    # Tiny close fills pinholes without ballooning the silhouette.
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
 
 
 def _binary_to_contour(binary: np.ndarray) -> Optional[np.ndarray]:
-    contours, _ = cv2.findContours(binary * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    mask = (binary > 0).astype(np.uint8) * 255
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not contours:
         return None
-    return max(contours, key=cv2.contourArea)
+    cnt = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(cnt) < 40:
+        return None
+    # Dense pixel-chain outline (Nx2 float) — overlay resamples as needed.
+    return cnt.reshape(-1, 2).astype(np.float32)
 
 
 def visible_masks(masks: List[np.ndarray], img: np.ndarray, min_overlap: int = 40) -> List[np.ndarray]:

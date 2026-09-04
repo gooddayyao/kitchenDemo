@@ -44,7 +44,6 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import config
-from src.detection_lock import DetectionLock
 from src.detection_merge import merge_produce_and_yolo
 from src.detector import Detector
 from src.gemini_seed import seed_from_frame
@@ -149,8 +148,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--detect-every",
         type=int,
-        default=2,
-        help="Run YOLO every N frames (default 2). Higher = less lag / lower CPU.",
+        default=1,
+        help="Run YOLO every N frames (default 1 = every frame). Higher = less CPU.",
     )
     p.add_argument(
         "--infer-width",
@@ -321,7 +320,6 @@ def main(argv: list[str] | None = None) -> int:
 
     manager = RecipeManager.from_path(recipe_path)
     renderer = OverlayRenderer()
-    locker = DetectionLock()
     image_demo = is_image_source(parse_source(source))
     gemini_track = bool(args.gemini_track)
 
@@ -341,6 +339,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Source: {source}")
     print("Class map:", config.POC_CLASS_MAP)
     print("Detectable now:", summarize_detectable())
+    if not gemini_track and not image_demo:
+        print("Tracking: YOLO-only (no DetectionLock / CamShift)")
 
     stream = StreamReader(
         source, loop_file=not args.no_loop, low_latency=True, strict=False
@@ -541,34 +541,24 @@ def main(argv: list[str] | None = None) -> int:
                 yolo_dets: list = []
                 if detector is not None:
                     infer = frame
-                    scale = 1.0
                     if args.infer_width and w > args.infer_width:
                         scale = args.infer_width / float(w)
                         infer = cv2.resize(frame, (args.infer_width, int(h * scale)))
                     yolo_filter = list(
                         dict.fromkeys([*yolo_class_names(), config.CONFIRM_OBJECT_CLASS])
                     )
-                    yolo_dets = detector.detect(infer, class_filter=yolo_filter)
-                    if scale != 1.0:
-                        inv = 1.0 / scale
-                        for d in yolo_dets:
-                            d.x1 *= inv
-                            d.y1 *= inv
-                            d.x2 *= inv
-                            d.y2 *= inv
-                            if d.contour is not None:
-                                pts = np.asarray(d.contour, dtype=np.float32).reshape(-1, 2)
-                                pts *= inv
-                                d.contour = pts
+                    yolo_dets = detector.detect(
+                        infer,
+                        class_filter=yolo_filter,
+                        output_size=(w, h),
+                    )
                 detections = merge_produce_and_yolo(frame, [], yolo_dets)
             elif not live_frame:
                 detections = []
+            elif not gemini_track and not image_demo:
+                # Between YOLO ticks keep last boxes (no CamShift); next YOLO refresh replaces them.
+                pass
 
-            detections = locker.update(
-                frame,
-                detections,
-                detections_fresh=live_frame and (image_demo or (frame_i % detect_every == 0)),
-            )
             if live_frame:
                 manager.update(detections, w, h)
 
@@ -650,7 +640,7 @@ def main(argv: list[str] | None = None) -> int:
                 if action == "restart":
                     manager.reset()
                     renderer.clear()
-                    locker.clear()
+                    detections = []
                     if tracker is not None:
                         tracker.clear()
                         force_reseed = True

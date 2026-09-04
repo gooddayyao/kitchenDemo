@@ -25,7 +25,7 @@
       "title": "切成 1cm 薄片",
       "instruction": "小黃瓜切為 1 公分薄片（完成按 N / Space）",
       "zone": "cutting_board",
-      "guidance_type": "cut_lines",
+      "guidance_type": "confirm_prep",
       "timer_seconds": 0,
       "completion": "manual_confirm",
       "target_ingredient": "cucumber",

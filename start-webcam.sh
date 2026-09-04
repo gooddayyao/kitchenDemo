@@ -29,4 +29,4 @@ echo " KITCHEN AR — 本機 / USB Webcam"
 echo " Camera index: $CAM_INDEX"
 echo " 畫面上方按鈕：重新開始 / 校正尺度 / 隱藏相機 / 下一步 / 離開"
 echo "========================================"
-exec "$PYTHON" -m src.phone_test --webcam "$CAM_INDEX" --detect-every 2 --infer-width 640
+exec "$PYTHON" -m src.phone_test --webcam "$CAM_INDEX" --detect-every 1 --infer-width 640

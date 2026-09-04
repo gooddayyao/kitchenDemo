@@ -53,7 +53,7 @@ echo  畫面上方按鈕：重新開始 / 校正尺度 / 隱藏相機 / 下一�
 echo ========================================
 echo.
 
-.\.venv\Scripts\python.exe -m src.phone_test --source "!SOURCE!" --detect-every 2 --infer-width 480
+.\.venv\Scripts\python.exe -m src.phone_test --source "!SOURCE!" --detect-every 1 --infer-width 480
 set "EXITCODE=!ERRORLEVEL!"
 
 if not "!EXITCODE!"=="0" (

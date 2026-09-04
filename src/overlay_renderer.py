@@ -179,6 +179,24 @@ def _align_closed(prev: np.ndarray, nxt: np.ndarray) -> np.ndarray:
     return best
 
 
+def _contour_sample_count(pts: np.ndarray) -> int:
+    """More perimeter → more samples so the highlight can follow real silhouette detail."""
+    arr = np.asarray(pts, dtype=np.float32).reshape(-1, 1, 2)
+    if len(arr) < 3:
+        return 64
+    peri = float(cv2.arcLength(arr, True))
+    return int(np.clip(round(peri / 3.5), 80, 256))
+
+
+def _prepare_outline_pts(pts: np.ndarray, *, heavy_smooth: bool = False) -> np.ndarray:
+    pts = np.asarray(pts, dtype=np.float32).reshape(-1, 2)
+    if len(pts) < 5:
+        return pts
+    window = 9 if heavy_smooth else 5
+    pts = _smooth_closed_contour(pts.reshape(-1, 1, 2), window=window).reshape(-1, 2)
+    return _resample_closed(pts, _contour_sample_count(pts))
+
+
 def _resample_closed(pts: np.ndarray, n: int = 48) -> np.ndarray:
     pts = np.asarray(pts, dtype=np.float32).reshape(-1, 2)
     if len(pts) < 3:
@@ -322,19 +340,22 @@ class OverlayRenderer:
                 if not is_target:
                     is_target = label_for(det.name) == label_for(highlight_class)
             nice = label_for(det.name)
-            color = det.glow_color or (0, 220, 90)
+            # Soft mint accent reads more like a UI cue than a hard debug stroke.
+            color = det.glow_color or (90, 230, 140)
             self._draw_object_outline(out, frame, det, color)
             key = self._outline_key(det)
             pts = self._outline_pts.get(key)
             if pts is not None and len(pts):
                 top = pts[int(np.argmin(pts[:, 1]))]
-                tw, _th = _measure_text(nice, 18)
+                tw, _th = _measure_text(nice, 20)
                 lx = int(round(float(top[0]))) - tw // 2
-                ly = max(self._top_chrome_h + 18, int(round(float(top[1]))) - 6)
+                ly = max(self._top_chrome_h + 18, int(round(float(top[1]))) - 10)
             else:
                 lx = int(round(det.x1))
                 ly = max(self._top_chrome_h + 18, int(round(det.y1)) - 8)
-            draw_text_bgr(out, nice, (lx, ly), color, font_size=18)
+            # Soft label: light fill with quiet shadow, not neon stroke text.
+            draw_text_bgr(out, nice, (lx + 1, ly + 1), (0, 0, 0), font_size=20)
+            draw_text_bgr(out, nice, (lx, ly), (245, 255, 245), font_size=20)
             if draw_cut_lines and is_target:
                 self._draw_cut_lines(
                     out,
@@ -374,7 +395,8 @@ class OverlayRenderer:
         det: Detection,
         color: Tuple[int, int, int],
     ) -> None:
-        """Stroke the object's silhouette instead of a glow ellipse."""
+        """Soft emphasis: translucent wash + outer glow + thin rim (not a hard polygon)."""
+        from_yolo = det.contour is not None
         contour = self._extract_outline(source, det)
         key = self._outline_key(det)
         prev = self._outline_pts.get(key)
@@ -383,12 +405,63 @@ class OverlayRenderer:
         if contour is None:
             self._draw_ellipse_outline(img, det, color)
             return
-        if prev is not None and prev.shape == contour.shape:
-            contour = (0.62 * prev + 0.38 * _align_closed(prev, contour)).astype(np.float32)
+        # Keep YOLO-seg masks snappy; only light temporal blend to reduce flicker.
+        if prev is not None and len(prev) >= 5:
+            n = max(len(prev), len(contour))
+            prev_r = _resample_closed(prev, n)
+            nxt = _resample_closed(contour, n)
+            alpha = 0.28 if from_yolo else 0.55
+            contour = ((1.0 - alpha) * prev_r + alpha * _align_closed(prev_r, nxt)).astype(
+                np.float32
+            )
         self._outline_pts[key] = contour
-        pts = np.round(contour).astype(np.int32)
-        cv2.drawContours(img, [pts], -1, (0, 0, 0), 5, lineType=cv2.LINE_AA)
-        cv2.drawContours(img, [pts], -1, color, 3, lineType=cv2.LINE_AA)
+        self._draw_soft_highlight(img, contour, color)
+
+    def _draw_soft_highlight(
+        self,
+        img: np.ndarray,
+        contour: np.ndarray,
+        color: Tuple[int, int, int],
+    ) -> None:
+        """Natural AR cue: soft fill + bloom glow + hairline rim."""
+        h, w = img.shape[:2]
+        pts = np.round(contour).astype(np.int32).reshape(-1, 1, 2)
+        if len(pts) < 3:
+            return
+
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.fillPoly(mask, [pts], 255, lineType=cv2.LINE_AA)
+
+        # Soft outer bloom (dilate then blur).
+        bloom_r = max(9, int(0.018 * max(h, w)) | 1)
+        bloom_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (bloom_r, bloom_r))
+        bloom = cv2.dilate(mask, bloom_kernel, iterations=1)
+        bloom = cv2.GaussianBlur(bloom, (0, 0), sigmaX=bloom_r * 0.55)
+        bloom_f = bloom.astype(np.float32) / 255.0
+        # Keep most bloom outside the solid core so the object stays readable.
+        core = cv2.GaussianBlur(mask, (0, 0), sigmaX=1.6).astype(np.float32) / 255.0
+        outer = np.clip(bloom_f - core * 0.55, 0.0, 1.0)
+
+        tint = np.array(color, dtype=np.float32)
+        base = img.astype(np.float32)
+        # Translucent wash inside silhouette.
+        fill_a = 0.22 * core[..., None]
+        base = base * (1.0 - fill_a) + tint * fill_a
+        # Outer glow.
+        glow_a = (0.42 * outer)[..., None]
+        base = base * (1.0 - glow_a) + tint * glow_a
+        img[:] = np.clip(base, 0, 255).astype(np.uint8)
+
+        # Soft hairline rim (no black outline).
+        rim = cv2.GaussianBlur(mask, (0, 0), sigmaX=1.2)
+        rim_edge = cv2.Canny(rim, 40, 120)
+        rim_edge = cv2.GaussianBlur(rim_edge, (3, 3), 0)
+        bright = tuple(int(min(255, c + 40)) for c in color)
+        rim_layer = np.zeros_like(img)
+        rim_layer[rim_edge > 0] = bright
+        rim_a = (rim_edge.astype(np.float32) / 255.0 * 0.85)[..., None]
+        blended = img.astype(np.float32) * (1.0 - rim_a) + rim_layer.astype(np.float32) * rim_a
+        img[:] = np.clip(blended, 0, 255).astype(np.uint8)
 
     def _draw_ellipse_outline(
         self,
@@ -400,14 +473,17 @@ class OverlayRenderer:
         cy = int(round((det.y1 + det.y2) * 0.5))
         ax = max(1, int(round((det.x2 - det.x1) * 0.5)))
         ay = max(1, int(round((det.y2 - det.y1) * 0.5)))
-        cv2.ellipse(img, (cx, cy), (ax, ay), 0, 0, 360, (0, 0, 0), 4, lineType=cv2.LINE_AA)
-        cv2.ellipse(img, (cx, cy), (ax, ay), 0, 0, 360, color, 2, lineType=cv2.LINE_AA)
+        # Build an ellipse polyline and reuse the soft highlight path.
+        t = np.linspace(0.0, 2.0 * np.pi, 72, endpoint=False)
+        pts = np.stack([cx + ax * np.cos(t), cy + ay * np.sin(t)], axis=1).astype(np.float32)
+        self._draw_soft_highlight(img, pts, color)
 
     def _extract_outline(self, frame: np.ndarray, det: Detection) -> Optional[np.ndarray]:
+        # Prefer YOLO-seg instance contour: keep geometry, only light smooth + densify.
         if det.contour is not None:
             pts = np.asarray(det.contour, dtype=np.float32).reshape(-1, 2)
             if len(pts) >= 5:
-                return _resample_closed(pts, 48)
+                return _prepare_outline_pts(pts, heavy_smooth=False)
 
         h, w = frame.shape[:2]
         pad = 10
@@ -429,15 +505,11 @@ class OverlayRenderer:
         box_area = float((x2 - x1) * (y2 - y1))
         if area < box_area * 0.08 or area < 40:
             return None
-        epsilon = 0.006 * cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, epsilon, True)
-        if len(approx) < 5:
-            approx = cnt
-        approx = _smooth_closed_contour(approx, window=7)
-        pts = approx.reshape(-1, 2).astype(np.float32)
+        pts = cnt.reshape(-1, 2).astype(np.float32)
         pts[:, 0] += x1
         pts[:, 1] += y1
-        return _resample_closed(pts, 48)
+        # Color/GrabCut fallback is noisier — allow slightly heavier smoothing.
+        return _prepare_outline_pts(pts, heavy_smooth=True)
 
     def _segment_roi(self, roi: np.ndarray, det: Detection) -> Optional[np.ndarray]:
         blur = cv2.GaussianBlur(roi, (5, 5), 0)
