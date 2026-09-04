@@ -31,6 +31,7 @@ class Detection:
     contour: Optional[Any] = None
     locked: bool = False
     glow_color: Optional[Tuple[int, int, int]] = None
+    track_id: Optional[str] = None
 
     @property
     def cx(self) -> float:

@@ -4,13 +4,14 @@
 
 | 檔案 | 說明 |
 |------|------|
-| `yolov8n-kitchen.pt` | 廚房食材 YOLO 權重（`train.py` 訓完會複製到這裡） |
+| `yolov8n-kitchen.pt` | 廚房食材 YOLO detect 權重 |
+| `yolov8n-seg-kitchen.pt` | 廚房食材 YOLO segment 權重（cucumber_v3 best，含 mask） |
 
 執行預覽時，`data/kitchen_detect_profile.json` 的 `yolo_model` 指向：
 
 ```text
-release/yolov8n-kitchen.pt
+release/yolov8n-seg-kitchen.pt
 ```
 
 `release/*.pt` 會進 Git，方便 clone 後直接跑預覽。  
-`training/weights/` 與其他路徑的 `.pt` 仍忽略，不提交訓練過程產物。
+`training/weights/`、`kitchen-seg-train/` 與其他路徑的 `.pt` 仍忽略，不提交訓練過程產物。

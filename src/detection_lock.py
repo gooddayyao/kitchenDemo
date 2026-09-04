@@ -119,13 +119,18 @@ def _center_size(det: Detection) -> Tuple[float, float, float, float]:
 
 
 def _set_center_size(det: Detection, cx: float, cy: float, bw: float, bh: float) -> None:
+    old_cx, old_cy = det.cx, det.cy
     bw = max(8.0, bw)
     bh = max(8.0, bh)
     det.x1 = cx - bw * 0.5
     det.y1 = cy - bh * 0.5
     det.x2 = cx + bw * 0.5
     det.y2 = cy + bh * 0.5
-    det.contour = None
+    if det.contour is not None:
+        pts = np.asarray(det.contour, dtype=np.float32).reshape(-1, 2)
+        pts[:, 0] += cx - old_cx
+        pts[:, 1] += cy - old_cy
+        det.contour = pts
 
 
 def _ema_center_size(
@@ -161,7 +166,10 @@ def _hsv_hist(frame: np.ndarray, det: Detection) -> Optional[np.ndarray]:
     return hist
 
 
-def _snapshot(det: Detection, color: Tuple[int, int, int]) -> Detection:
+def _snapshot(det: Detection, color: Tuple[int, int, int], track_id: str) -> Detection:
+    contour = None
+    if det.contour is not None:
+        contour = np.asarray(det.contour, dtype=np.float32).reshape(-1, 2).copy()
     return Detection(
         name=det.name,
         conf=float(det.conf),
@@ -169,9 +177,10 @@ def _snapshot(det: Detection, color: Tuple[int, int, int]) -> Detection:
         y1=float(det.y1),
         x2=float(det.x2),
         y2=float(det.y2),
-        contour=None,
+        contour=contour,
         locked=True,
         glow_color=color,
+        track_id=track_id,
     )
 
 
@@ -196,11 +205,12 @@ class DetectionLock:
     ) -> None:
         self.min_conf = float(min_conf if min_conf is not None else config.LOCK_CONF)
         self.lost_sec = float(lost_sec if lost_sec is not None else config.LOCK_LOST_SEC)
-        self._tracks: Dict[str, _Track] = {}
+        self._tracks: Dict[int, _Track] = {}
+        self._next_id = 1
 
     @property
     def locked_names(self) -> Set[str]:
-        return set(self._tracks.keys())
+        return {t.det.name for t in self._tracks.values()}
 
     def clear(self) -> None:
         self._tracks.clear()
@@ -215,36 +225,34 @@ class DetectionLock:
     ) -> List[Detection]:
         now = time.monotonic() if now is None else now
         skip = {config.CONFIRM_OBJECT_CLASS}
-        by_name: Dict[str, List[Detection]] = {}
-        for det in detections:
-            by_name.setdefault(det.name, []).append(det)
+        incoming = [d for d in detections if d.name not in skip]
+        skipped = [d for d in detections if d.name in skip]
+        available = list(incoming)
 
-        lost: List[str] = []
-        for name, track in self._tracks.items():
+        lost: List[int] = []
+        for tid, track in self._tracks.items():
             quality = self._advance_camshift(frame, track)
             if track.quality_peak <= 0 and quality > 0:
                 track.quality_peak = quality
 
             yolo_hit = False
             if detections_fresh:
-                match = self._best_match(track.det, by_name.get(track.det.name) or [])
+                same = [d for d in available if d.name == track.det.name]
+                match = self._best_match(track.det, same)
                 if match is not None:
                     yolo_hit = True
-                    mcx, mcy, _mw, _mh = _center_size(match)
-                    dist = ((mcx - track.det.cx) ** 2 + (mcy - track.det.cy) ** 2) ** 0.5
-                    # YOLO boxes jitter every few frames; only re-anchor if tracker drifted.
-                    span = max(track.lock_bw, track.lock_bh)
-                    if dist > max(28.0, 0.4 * span):
-                        _ema_center_size(
-                            track.det,
-                            mcx,
-                            mcy,
-                            track.lock_bw,
-                            track.lock_bh,
-                            pos_alpha=0.35,
-                            size_alpha=0.0,
-                        )
-                        track.window = _window_from_det(track.det, frame)
+                    available.remove(match)
+                    track.det.conf = float(match.conf)
+                    track.det.x1 = float(match.x1)
+                    track.det.y1 = float(match.y1)
+                    track.det.x2 = float(match.x2)
+                    track.det.y2 = float(match.y2)
+                    if match.contour is not None:
+                        track.det.contour = np.asarray(match.contour, dtype=np.float32).reshape(-1, 2).copy()
+                    track.window = _window_from_det(track.det, frame)
+                    _cx, _cy, bw, bh = _center_size(track.det)
+                    track.lock_bw = bw
+                    track.lock_bh = bh
 
             peak = max(track.quality_peak, 1e-4)
             track_ok = quality >= 0.16 or quality >= 0.32 * peak
@@ -262,32 +270,30 @@ class DetectionLock:
                 if track.missing_since is None:
                     track.missing_since = now
                 elif now - track.missing_since >= self.lost_sec:
-                    lost.append(name)
+                    lost.append(tid)
 
-        for name in lost:
-            del self._tracks[name]
+        for tid in lost:
+            del self._tracks[tid]
 
-        ranked = sorted(detections, key=lambda d: float(d.conf), reverse=True)
+        ranked = sorted(available, key=lambda d: float(d.conf), reverse=True)
+        still_unlocked: List[Detection] = []
         for det in ranked:
-            if det.name in skip or det.name in self._tracks:
-                continue
             if float(det.conf) >= self.min_conf:
-                locked = _snapshot(det, dominant_bgr(frame, det))
+                tid = self._next_id
+                self._next_id += 1
+                locked = _snapshot(det, dominant_bgr(frame, det), str(tid))
                 _cx, _cy, bw, bh = _center_size(locked)
-                self._tracks[det.name] = _Track(
+                self._tracks[tid] = _Track(
                     det=locked,
                     hist=_hsv_hist(frame, det),
                     window=_window_from_det(det, frame),
                     lock_bw=bw,
                     lock_bh=bh,
                 )
+            else:
+                still_unlocked.append(det)
 
-        live = [
-            det
-            for det in detections
-            if det.name not in self._tracks or det.name in skip
-        ]
-        return live + [t.det for t in self._tracks.values()]
+        return still_unlocked + skipped + [t.det for t in self._tracks.values()]
 
     def _best_match(self, locked: Detection, cands: Sequence[Detection]) -> Optional[Detection]:
         scored: List[Tuple[float, Detection]] = []

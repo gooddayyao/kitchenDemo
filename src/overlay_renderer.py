@@ -287,19 +287,19 @@ class OverlayRenderer:
     ) -> np.ndarray:
         out = frame.copy()
         self._top_chrome_h = TOP_CHROME_H + (ERROR_BANNER_H if error_message else 0)
-        locked = [d for d in detections if d.locked]
+        drawables = [
+            d for d in detections if d.name != config.CONFIRM_OBJECT_CLASS
+        ]
 
         # Dropzone confirm region is intentionally not drawn (was upper-right green box).
         _ = dropzone  # kept for API compatibility / future use
 
-        locked_names = {d.name for d in locked}
+        live_keys = {self._outline_key(d) for d in drawables}
         for name in list(self._outline_pts):
-            if name not in locked_names:
+            if name not in live_keys:
                 del self._outline_pts[name]
 
-        for det in locked:
-            if det.name == config.CONFIRM_OBJECT_CLASS or not det.glow_color:
-                continue
+        for det in drawables:
             is_target = False
             if highlight_class is None:
                 is_target = True
@@ -308,10 +308,19 @@ class OverlayRenderer:
                 if not is_target:
                     is_target = label_for(det.name) == label_for(highlight_class)
             nice = label_for(det.name)
-            self._draw_object_outline(out, frame, det, det.glow_color)
-            lx = int(round(det.x1))
-            ly = max(self._top_chrome_h + 18, int(round(det.y1)) - 8)
-            draw_text_bgr(out, nice, (lx, ly), det.glow_color, font_size=18)
+            color = det.glow_color or (0, 220, 90)
+            self._draw_object_outline(out, frame, det, color)
+            key = self._outline_key(det)
+            pts = self._outline_pts.get(key)
+            if pts is not None and len(pts):
+                top = pts[int(np.argmin(pts[:, 1]))]
+                tw, _th = _measure_text(nice, 18)
+                lx = int(round(float(top[0]))) - tw // 2
+                ly = max(self._top_chrome_h + 18, int(round(float(top[1]))) - 6)
+            else:
+                lx = int(round(det.x1))
+                ly = max(self._top_chrome_h + 18, int(round(det.y1)) - 8)
+            draw_text_bgr(out, nice, (lx, ly), color, font_size=18)
             if draw_cut_lines and is_target:
                 self._draw_cut_lines(
                     out,
@@ -339,6 +348,11 @@ class OverlayRenderer:
     def hit_action(self, x: int, y: int) -> Optional[str]:
         return hit_toolbar(self._toolbar, x, y)
 
+    def _outline_key(self, det: Detection) -> str:
+        if det.track_id:
+            return str(det.track_id)
+        return f"{det.name}:{int(det.cx) // 12}:{int(det.cy) // 12}"
+
     def _draw_object_outline(
         self,
         img: np.ndarray,
@@ -348,7 +362,7 @@ class OverlayRenderer:
     ) -> None:
         """Stroke the object's silhouette instead of a glow ellipse."""
         contour = self._extract_outline(source, det)
-        key = det.name
+        key = self._outline_key(det)
         prev = self._outline_pts.get(key)
         if contour is None:
             contour = prev

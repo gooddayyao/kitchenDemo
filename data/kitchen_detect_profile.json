@@ -1,9 +1,9 @@
 {
   "description": "KITCHEN CV detect/trigger profile. Edit this file to adjust mappings and thresholds.",
-  "yolo_model": "release/yolov8n-kitchen.pt",
+  "yolo_model": "release/yolov8n-seg-kitchen.pt",
   "yolo_conf": 0.35,
   "yolo_iou": 0.45,
-  "lock_conf": 0.7,
+  "lock_conf": 0.35,
   "lock_lost_sec": 0.8,
   "confirm_object_class": "mouse",
   "poc_class_map": {
@@ -52,5 +52,6 @@
     "reseed_cooldown_sec": 4.0,
     "max_lose_frames": 20,
     "jpeg_max_side": 960
-  }
+  },
+  "yolo_type": "seg"
 }

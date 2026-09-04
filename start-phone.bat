@@ -6,6 +6,7 @@ REM KITCHEN Phase 1 — phone IP Webcam
 REM Usage:
 REM   start-phone.bat
 REM   start-phone.bat 192.168.31.140
+REM Default (no args): http://10.179.115.150:8080/video
 REM   start-phone.bat 192.168.31.140:8080
 REM   start-phone.bat http://192.168.31.140:8080/video
 REM   start-phone.bat rtsp://192.168.31.140:8080/h264_ulaw.sdp
@@ -21,16 +22,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 set "ARG=%~1"
-if "!ARG!"=="" (
-    echo ========================================
-    echo  KITCHEN AR — phone IP Webcam
-    echo ========================================
-    echo  1. Install IP Webcam on phone
-    echo  2. PC joins phone hotspot / same Wi-Fi
-    echo  3. App: Start server, note the IP
-    echo.
-    set /p ARG="Enter phone IP or full URL: "
-)
+if "!ARG!"=="" set "ARG=10.179.115.150"
 
 REM trim spaces
 for /f "tokens=* delims= " %%A in ("!ARG!") do set "ARG=%%A"
@@ -61,7 +53,7 @@ echo  畫面上方按鈕：重新開始 / 校正尺度 / 下一步 / 離開
 echo ========================================
 echo.
 
-.\.venv\Scripts\python.exe -m src.phone_test --source "!SOURCE!" --detect-every 3 --infer-width 480
+.\.venv\Scripts\python.exe -m src.phone_test --source "!SOURCE!" --detect-every 2 --infer-width 480
 set "EXITCODE=!ERRORLEVEL!"
 
 if not "!EXITCODE!"=="0" (

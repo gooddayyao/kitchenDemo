@@ -553,6 +553,10 @@ def main(argv: list[str] | None = None) -> int:
                             d.y1 *= inv
                             d.x2 *= inv
                             d.y2 *= inv
+                            if d.contour is not None:
+                                pts = np.asarray(d.contour, dtype=np.float32).reshape(-1, 2)
+                                pts *= inv
+                                d.contour = pts
                 detections = merge_produce_and_yolo(frame, [], yolo_dets)
             elif not live_frame:
                 detections = []
