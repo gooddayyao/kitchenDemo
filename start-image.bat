@@ -32,7 +32,7 @@ if not exist "%~1" (
 echo ========================================
 echo  KITCHEN AR — Cucumber image demo
 echo  Image: %~1
-echo  畫面上方按鈕：重新開始 / 校正尺度 / 下一步 / 離開
+echo  畫面上方按鈕：重新開始 / 校正尺度 / 隱藏相機 / 下一步 / 離開
 echo ========================================
 echo.
 

@@ -22,6 +22,7 @@ Low-latency tips (IP Webcam):
 Keys / on-screen buttons (top row):
   重新開始 (R)     — restart demo from step 1
   校正尺度 (C)     — calibrate cutting-board scale
+  隱藏/顯示相機 (V)— hide camera pixels; keep UI + marks
   下一步 (N/Space) — manual confirm / next step
   離開 (Q/ESC)     — quit
   G              — Gemini re-identify (when --gemini-track)
@@ -63,6 +64,8 @@ def key_to_action(key: int) -> Optional[str]:
         return "restart"
     if key in (ord("c"), ord("C")):
         return "calibrate"
+    if key in (ord("v"), ord("V")):
+        return "toggle_camera"
     if key in (ord("n"), ord("N"), 32):
         return "next"
     return None
@@ -652,6 +655,9 @@ def main(argv: list[str] | None = None) -> int:
                         tracker.clear()
                         force_reseed = True
                     print("[demo] restarted")
+                elif action == "toggle_camera":
+                    shown = renderer.toggle_camera()
+                    print(f"[demo] camera {'shown' if shown else 'hidden'} (UI/marks kept)")
                 elif action == "calibrate":
                     if camera_error or not stream.is_ready():
                         camera_error = camera_error or describe_stream_error(

@@ -28,9 +28,11 @@ _COLOR_PANEL = (20, 20, 20)
 TOOLBAR_ACTIONS: Tuple[Tuple[str, str], ...] = (
     ("restart", "重新開始"),
     ("calibrate", "校正尺度"),
+    ("toggle_camera", "隱藏相機"),
     ("next", "下一步"),
     ("quit", "離開"),
 )
+_BLANK_CAMERA_BGR = (28, 28, 28)
 TOOLBAR_H = 52
 HUD_BODY_H = 48
 ERROR_BANNER_H = 40
@@ -80,7 +82,7 @@ def _measure_text(text: str, font_size: int) -> Tuple[int, int]:
     return max(1, len(text) * max(8, font_size // 2)), font_size
 
 
-def layout_toolbar(frame_w: int) -> List[Dict[str, Any]]:
+def layout_toolbar(frame_w: int, *, show_camera: bool = True) -> List[Dict[str, Any]]:
     """Hit-testable top-row buttons. frame_w reserved for future wrapping."""
     _ = frame_w
     x = 10
@@ -89,6 +91,8 @@ def layout_toolbar(frame_w: int) -> List[Dict[str, Any]]:
     gap = 8
     buttons: List[Dict[str, Any]] = []
     for action, label in TOOLBAR_ACTIONS:
+        if action == "toggle_camera":
+            label = "隱藏相機" if show_camera else "顯示相機"
         tw, _th = _measure_text(label, 18)
         width = max(100, tw + 28)
         buttons.append(
@@ -259,6 +263,7 @@ def draw_texts_bgr(
 class OverlayRenderer:
     def __init__(self) -> None:
         self.hover_id: Optional[str] = None
+        self.show_camera: bool = True
         self._toolbar: List[Dict[str, Any]] = []
         self._frame_size: Tuple[int, int] = (0, 0)
         self._outline_pts: Dict[str, np.ndarray] = {}
@@ -266,6 +271,11 @@ class OverlayRenderer:
 
     def clear(self) -> None:
         self._outline_pts.clear()
+
+    def toggle_camera(self) -> bool:
+        """Show/hide live camera pixels; overlays stay. Returns new show_camera state."""
+        self.show_camera = not self.show_camera
+        return self.show_camera
 
     def render(
         self,
@@ -285,7 +295,11 @@ class OverlayRenderer:
         ingredients: Optional[Sequence[Dict[str, Any]]] = None,
         error_message: str = "",
     ) -> np.ndarray:
-        out = frame.copy()
+        # Keep the real frame for silhouette extraction even when camera is hidden.
+        if self.show_camera:
+            out = frame.copy()
+        else:
+            out = np.full(frame.shape, _BLANK_CAMERA_BGR, dtype=np.uint8)
         self._top_chrome_h = TOP_CHROME_H + (ERROR_BANNER_H if error_message else 0)
         drawables = [
             d for d in detections if d.name != config.CONFIRM_OBJECT_CLASS
@@ -602,7 +616,7 @@ class OverlayRenderer:
     def _draw_toolbar(self, img: np.ndarray, scale_hint: str) -> None:
         h, w = img.shape[:2]
         self._frame_size = (w, h)
-        self._toolbar = layout_toolbar(w)
+        self._toolbar = layout_toolbar(w, show_camera=self.show_camera)
         texts: List[Tuple[str, Tuple[int, int], Tuple[int, int, int], int]] = []
         for btn in self._toolbar:
             hovered = self.hover_id == btn["id"]
@@ -613,6 +627,8 @@ class OverlayRenderer:
                 border = (0, 200, 255)
             elif btn["id"] == "quit":
                 border = (90, 90, 210)
+            elif btn["id"] == "toggle_camera":
+                border = (120, 180, 90) if self.show_camera else (90, 90, 120)
             if hovered:
                 fill = (72, 72, 72)
                 border = (255, 209, 102)
